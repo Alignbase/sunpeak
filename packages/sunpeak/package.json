@@ -1,6 +1,6 @@
 {
   "name": "sunpeak",
-  "version": "0.20.68",
+  "version": "0.20.69",
   "description": "App framework, testing framework, and inspector for MCP Apps.",
   "type": "module",
   "main": "./dist/index.cjs",
