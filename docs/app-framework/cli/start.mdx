@@ -30,6 +30,7 @@ Tools are registered with the MCP protocol using `registerAppTool` from the MCP 
 | `--host <address>` | | Bind address (default: `0.0.0.0`, also respects `HOST` env var) |
 | `--json-logs` | | Output structured JSON lines to stdout/stderr |
 | `--sse` | | Use SSE streaming instead of JSON responses (default: JSON) |
+| `--sse-keep-alive-ms <number>` | | SSE keep-alive interval in milliseconds when `--sse` is enabled (default: 15000, also respects `SUNPEAK_SSE_KEEP_ALIVE_MS`; `0` disables keep-alives) |
 | `--stateless` | | Stateless mode — no session tracking, fresh server per request. For serverless and horizontally-scaled deployments. See [Deployment Guide](/app-framework/guides/deployment#serverless--edge-deployment). |
 
 ## Usage
@@ -43,6 +44,9 @@ sunpeak start --port 3000 --host 127.0.0.1
 
 # Structured logging for production
 sunpeak start --json-logs
+
+# SSE streaming with a 10s keep-alive
+sunpeak start --sse --sse-keep-alive-ms 10000
 
 # Via environment variables
 PORT=3000 HOST=127.0.0.1 sunpeak start
@@ -60,7 +64,7 @@ PORT=3000 HOST=127.0.0.1 sunpeak start
 
 The `/health` endpoint is for load balancer probes, Kubernetes liveness/readiness checks, and uptime monitoring. It is always unauthenticated.
 
-The production server uses the MCP Streamable HTTP transport. In the default stateful mode, session IDs are managed via the `mcp-session-id` header. In `--stateless` mode, only `POST /mcp` is available (no SSE streaming or session deletion).
+The production server uses the MCP Streamable HTTP transport. In the default stateful mode, session IDs are managed via the `mcp-session-id` header. In `--stateless` mode, only `POST /mcp` is available (no SSE streaming or session deletion). When `--sse` is enabled, sunpeak sends periodic SSE keep-alive comments every 15 seconds by default.
 
 ## Authentication
 

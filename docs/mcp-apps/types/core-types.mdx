@@ -71,7 +71,7 @@ Capabilities supported by the host, received during initialization.
 
 ```ts
 interface McpUiHostCapabilities {
-  experimental?: {};
+  experimental?: Record<string, object>;
   openLinks?: {};
   downloadFile?: {};
   serverTools?: { listChanged?: boolean };
@@ -89,6 +89,7 @@ interface McpUiHostCapabilities {
 
 | Field | Description |
 |-------|-------------|
+| `experimental` | Experimental feature configuration keyed by feature identifier |
 | `openLinks` | Host supports [`openLink()`](/mcp-apps/app/requests/open-link) |
 | `downloadFile` | Host supports [`downloadFile()`](/mcp-apps/app/requests/download-file) |
 | `serverTools` | Host can proxy [`callServerTool()`](/mcp-apps/app/requests/call-server-tool) to the MCP server |
@@ -105,7 +106,7 @@ Capabilities provided by the View, sent during initialization.
 
 ```ts
 interface McpUiAppCapabilities {
-  experimental?: {};
+  experimental?: Record<string, object>;
   tools?: { listChanged?: boolean };
   availableDisplayModes?: McpUiDisplayMode[];
 }
@@ -113,6 +114,7 @@ interface McpUiAppCapabilities {
 
 | Field | Description |
 |-------|-------------|
+| `experimental` | Experimental feature configuration keyed by feature identifier |
 | `tools` | App exposes tools that the host can call via `oncalltool` |
 | `availableDisplayModes` | Display modes the app supports |
 

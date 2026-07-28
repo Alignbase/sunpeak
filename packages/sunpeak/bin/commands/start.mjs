@@ -46,6 +46,26 @@ export async function start(projectRoot = process.cwd(), args = []) {
   const jsonLogs = args.includes('--json-logs');
   const sse = args.includes('--sse');
   const stateless = args.includes('--stateless');
+  let sseKeepAliveMs;
+  const sseKeepAliveArgIndex = args.findIndex(arg => arg === '--sse-keep-alive-ms');
+  if (
+    sseKeepAliveArgIndex !== -1 &&
+    (!args[sseKeepAliveArgIndex + 1] || args[sseKeepAliveArgIndex + 1].startsWith('--'))
+  ) {
+    console.error('Error: --sse-keep-alive-ms requires a value');
+    process.exit(1);
+  }
+  const sseKeepAliveRaw =
+    sseKeepAliveArgIndex !== -1 && args[sseKeepAliveArgIndex + 1]
+      ? args[sseKeepAliveArgIndex + 1]
+      : process.env.SUNPEAK_SSE_KEEP_ALIVE_MS;
+  if (sseKeepAliveRaw != null) {
+    sseKeepAliveMs = Number(sseKeepAliveRaw);
+    if (!Number.isFinite(sseKeepAliveMs)) {
+      console.error('Error: --sse-keep-alive-ms must be a number');
+      process.exit(1);
+    }
+  }
 
   // Import production server from sunpeak
   const isTemplate = projectRoot.endsWith('/template') || projectRoot.endsWith('\\template');
@@ -194,7 +214,17 @@ export async function start(projectRoot = process.cwd(), args = []) {
   if (stateless) console.log('Stateless mode enabled (no session tracking)');
 
   startProductionHttpServer(
-    { name, version, serverInfo: serverConfig, tools, resources, auth, stateless, ...(sse ? { enableJsonResponse: false } : {}) },
+    {
+      name,
+      version,
+      serverInfo: serverConfig,
+      tools,
+      resources,
+      auth,
+      stateless,
+      ...(sse ? { enableJsonResponse: false } : {}),
+      ...(sseKeepAliveMs !== undefined ? { sseKeepAliveMs } : {}),
+    },
     { port, host }
   );
 }

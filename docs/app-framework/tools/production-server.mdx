@@ -90,6 +90,10 @@ app.listen(3000);
   Respond with JSON instead of SSE streams. Recommended for serverless environments (Lambda, Workers, Vercel Edge) where holding open SSE connections is unreliable. Set to `false` if you need SSE streaming for long-running tool calls.
 </ResponseField>
 
+<ResponseField name="sseKeepAliveMs" type="number" default="15000">
+  Interval in milliseconds between SSE keep-alive comments when `enableJsonResponse` is `false`. Set to `0` to disable keep-alives.
+</ResponseField>
+
 <ResponseField name="stateless" type="boolean" default="false">
   Enable stateless mode for serverless and horizontally-scaled deployments. When `true`, every request creates a fresh MCP server instance with no session tracking. The host is identified from HTTP headers (`User-Agent`, `x-anthropic-client`, `x-openai-session`) on every request. See [Serverless Deployment](/app-framework/guides/deployment#serverless--edge-deployment) and [Horizontal Scaling](/app-framework/guides/deployment#horizontal-scaling).
 </ResponseField>
@@ -131,7 +135,7 @@ export default app;
 
 ### `WebHandlerConfig`
 
-Same shape as `ProductionServerConfig` (including `enableJsonResponse` and `stateless`), except `auth` takes a Web Standard `Request`:
+Same shape as `ProductionServerConfig` (including `enableJsonResponse`, `sseKeepAliveMs`, and `stateless`), except `auth` takes a Web Standard `Request`:
 
 <ResponseField name="auth" type="(req: Request) => AuthInfo | null">
   Auth function for Web Standard environments. Return `AuthInfo` to authenticate, `null` to reject with 401.

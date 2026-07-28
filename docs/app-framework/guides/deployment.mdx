@@ -220,7 +220,7 @@ const handler = createHandler({
 
 For custom MCP clients that don't send identifiable headers, `detectClientFromHeaders` is exported from `sunpeak/mcp` so you can build your own detection logic in a custom handler.
 
-Both `createMcpHandler` and `createHandler` use JSON responses by default (`enableJsonResponse: true`), which works reliably across all environments including serverless. If you need SSE streaming (e.g., for progress updates on long-running tool calls), set `enableJsonResponse: false` in your config. See [Production Server API](/app-framework/tools/production-server) for details.
+Both `createMcpHandler` and `createHandler` use JSON responses by default (`enableJsonResponse: true`), which works reliably across all environments including serverless. If you need SSE streaming (e.g., for progress updates on long-running tool calls), set `enableJsonResponse: false` in your config. SSE streams send keep-alive comments every 15 seconds by default; set `sseKeepAliveMs` to tune that interval or `0` to disable it. See [Production Server API](/app-framework/tools/production-server) for details.
 
 <Info>
 For fully custom MCP server setups, `sunpeak/mcp` also re-exports `registerAppTool`, `registerAppResource`, and `RESOURCE_MIME_TYPE` from the [MCP Apps SDK](https://github.com/anthropics/ext-apps). See [Server Helpers](/app-framework/run-mcp-server#server-helpers) for the full list.

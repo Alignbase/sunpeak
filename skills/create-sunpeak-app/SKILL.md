@@ -451,6 +451,8 @@ sunpeak start                          # Default: port 8000, all interfaces
 sunpeak start --port 3000              # Custom port
 sunpeak start --host 127.0.0.1         # Bind to localhost only
 sunpeak start --json-logs              # Structured JSON logging
+sunpeak start --sse                    # SSE streaming with 15s keep-alives
+sunpeak start --sse-keep-alive-ms 0    # Disable SSE keep-alives
 PORT=3000 HOST=127.0.0.1 sunpeak start # Via environment variables
 ```
 
@@ -459,6 +461,7 @@ The production server provides:
 - `/mcp` — MCP Streamable HTTP endpoint
 - Graceful shutdown on SIGTERM/SIGINT (5-second drain)
 - Structured JSON logging (`--json-logs`) for log aggregation (Datadog, CloudWatch, etc.)
+- SSE keep-alive comments when `--sse` is enabled (`--sse-keep-alive-ms` or `SUNPEAK_SSE_KEEP_ALIVE_MS` to tune)
 
 ## Production Build Output
 

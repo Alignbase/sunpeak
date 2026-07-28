@@ -18,7 +18,7 @@
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.6.0",
     "embla-carousel-wheel-gestures": "^8.1.0",
-    "sunpeak": "^0.20.68",
+    "sunpeak": "^0.20.69",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },

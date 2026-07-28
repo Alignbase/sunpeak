@@ -145,6 +145,12 @@ export interface ProductionServerConfig {
    */
   enableJsonResponse?: boolean;
   /**
+   * Interval in milliseconds between SSE keep-alive comments.
+   * Only applies when `enableJsonResponse` is `false`. Defaults to the MCP SDK
+   * transport default (15000ms). Values below 1 disable keep-alives.
+   */
+  sseKeepAliveMs?: number;
+  /**
    * Enable stateless mode for serverless and horizontally-scaled deployments.
    *
    * When `true`, every request creates a fresh MCP server instance with no
@@ -186,6 +192,12 @@ export interface WebHandlerConfig {
    */
   enableJsonResponse?: boolean;
   /**
+   * Interval in milliseconds between SSE keep-alive comments.
+   * Only applies when `enableJsonResponse` is `false`. Defaults to the MCP SDK
+   * transport default (15000ms). Values below 1 disable keep-alives.
+   */
+  sseKeepAliveMs?: number;
+  /**
    * Enable stateless mode for serverless and horizontally-scaled deployments.
    *
    * When `true`, every request creates a fresh MCP server instance with no
@@ -219,6 +231,7 @@ function toInternalConfig(
     resources: config.resources,
     serverUrl: config.serverUrl,
     enableJsonResponse: config.enableJsonResponse,
+    sseKeepAliveMs: config.sseKeepAliveMs,
     stateless: config.stateless,
     _clientName: clientName,
   };
@@ -709,6 +722,7 @@ export function createMcpHandler(
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: undefined, // stateless — no session tracking
         enableJsonResponse: config.enableJsonResponse ?? true,
+        keepAliveMs: config.sseKeepAliveMs,
       });
 
       transport.onerror = (error) => {
@@ -786,6 +800,7 @@ export function createMcpHandler(
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         enableJsonResponse: config.enableJsonResponse ?? true,
+        keepAliveMs: config.sseKeepAliveMs,
         onsessioninitialized: (id) => {
           sessions.set(id, { server, transport, lastActivity: Date.now() });
           log('info', `Session started: ${id.substring(0, 8)}...`, {
@@ -962,6 +977,7 @@ export function createHandler(config: WebHandlerConfig): (req: Request) => Promi
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: undefined, // stateless — no session tracking
         enableJsonResponse: config.enableJsonResponse ?? true,
+        keepAliveMs: config.sseKeepAliveMs,
       });
 
       transport.onerror = (error) => {
@@ -1029,6 +1045,7 @@ export function createHandler(config: WebHandlerConfig): (req: Request) => Promi
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         enableJsonResponse: config.enableJsonResponse ?? true,
+        keepAliveMs: config.sseKeepAliveMs,
         onsessioninitialized: (id) => {
           sessions.set(id, { server, transport, lastActivity: Date.now() });
           log('info', `Session started: ${id.substring(0, 8)}...`, {
