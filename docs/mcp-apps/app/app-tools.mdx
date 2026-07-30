@@ -18,7 +18,7 @@ App-side tools are useful when the answer lives inside the View and can't be ans
 - **Local computation** — derive values from data the View has already loaded
 - **User intent** — surface explicit UI actions (a "Save" button, a confirm dialog) to the model
 
-This page ties together the four pieces that make app-side tools work: the [`tools` capability](#1-declare-the-tools-capability), [`onlisttools`](#2-declare-which-tools-the-app-exposes), [`oncalltool`](#3-handle-tool-calls), and (optionally) [`sendToolListChanged`](#dynamic-tool-lists) for dynamic tool lists.
+This page ties together the four pieces that make app-side tools work: the [`tools` capability](#1-declare-the-tools-capability), [`onlisttools`](#2-declare-which-tools-the-app-exposes), [`oncalltool`](#3-handle-tool-calls), and list-changed notifications for dynamic tool lists.
 
 ## Two ways to register tools
 
@@ -30,7 +30,7 @@ Declare a fixed list once. The host queries [`onlisttools`](/mcp-apps/app/event-
 
 ### Dynamic registry — `app.registerTool()`
 
-Add, update, enable, disable, or remove tools at runtime. Each call returns a handle with `enable()`, `disable()`, `remove()`, and `update()`. The SDK builds the tool list and dispatches calls for you. Pair with [`sendToolListChanged`](/mcp-apps/app/requests#sendtoollistchanged) to notify the host that the list has changed.
+Add, update, enable, disable, or remove tools at runtime. Each call returns a handle with `enable()`, `disable()`, `remove()`, and `update()`. The SDK builds the tool list, dispatches calls, and sends list-changed notifications automatically when the capability is enabled.
 
 <Tip>
 In the [sunpeak framework](/quickstart), use [`useAppTools()`](/app-framework/hooks/use-app-tools) for the static pattern or [`useRegisterTool()`](/app-framework/hooks/use-register-tool) for the dynamic pattern.
@@ -48,6 +48,8 @@ const app = new App(
 ```
 
 Set `listChanged: true` only if you plan to add or remove tools at runtime. The host will re-query `onlisttools` whenever you send a `notifications/tools/list_changed` notification.
+
+When you call `app.registerTool()` before `connect()`, the SDK declares `{ tools: { listChanged: true } }` automatically if you did not provide a `tools` capability. Manual `onlisttools` and `oncalltool` handlers still require you to declare the capability yourself.
 
 ## 2. Declare which tools the app exposes
 
@@ -100,7 +102,7 @@ The returned handle exposes lifecycle methods:
 
 | Method | Effect |
 |--------|--------|
-| `update(config)` | Replace name, description, schemas, or annotations |
+| `update(config)` | Update the title, description, schemas, annotations, metadata, or enabled state |
 | `enable()` | Re-list the tool after `disable()` |
 | `disable()` | Hide the tool from the host (still registered) |
 | `remove()` | Permanently remove the tool |
@@ -155,25 +157,27 @@ app.oncalltool = async (params) => {
 
 ## Dynamic tool lists
 
-Notify the host whenever the tool list changes — after `registerTool`, `enable()`, `disable()`, or `remove()`. The host re-runs `tools/list` and updates the model's available tools for the next turn.
-
-```ts
-await app.sendToolListChanged();
-```
-
-This works only when the View declared `tools: { listChanged: true }` and the host also reported `tools.listChanged` support in its capabilities.
-
-A typical pattern: register tools eagerly, then enable or disable them as UI state changes.
+The dynamic registry sends `notifications/tools/list_changed` automatically after `registerTool()`, `update()`, `enable()`, `disable()`, or `remove()` when the View has initialized with `listChanged: true`.
 
 ```ts
 const saveHandle = app.registerTool("save", { description: "Save changes" }, saveHandler);
-saveHandle.disable(); // hidden until there are unsaved changes
+
+saveHandle.disable(); // SDK notifies the host
+saveHandle.enable(); // SDK notifies the host again
+```
+
+Use [`sendToolListChanged()`](/mcp-apps/app/requests#sendtoollistchanged) when you manage a custom `onlisttools` result outside the registry:
+
+```ts
+let exposeSelectionTool = false;
 
 editor.on("dirty", async () => {
-  saveHandle.enable();
+  exposeSelectionTool = true;
   await app.sendToolListChanged();
 });
 ```
+
+List-changed notifications work only when the View declared `tools: { listChanged: true }` and the Host supports app-side tools. The Host then re-runs `tools/list` and updates the model's available tools for the next turn.
 
 ## Tool visibility — model, app, or both
 
@@ -235,7 +239,6 @@ const insertHandle = app.registerTool(
 );
 
 await app.connect();
-await app.sendToolListChanged(); // announce the dynamic tool
 ```
 
 ## Related

@@ -71,6 +71,8 @@ The View then sends `ui/notifications/initialized` to signal readiness.
 The `App` class handles this handshake automatically in `connect()`. Register event handlers **before** calling `connect()` to avoid missing notifications.
 </Info>
 
+The View-to-Host MCP Apps version is separate from the core MCP version used between the Host and server. See [Protocol Versions and Compatibility](/mcp-apps/protocol-versions) for both handshakes and their capability checks.
+
 ## 3. Data Delivery
 
 The Host sends tool arguments and results to the View:

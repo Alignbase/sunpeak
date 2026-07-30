@@ -8,7 +8,9 @@ keywords: ["MCP Apps", "ChatGPT Apps", "React hooks", "tools", "tool list change
 
 ## Overview
 
-Returns a function to notify the host that the app's available tools have changed. Call this after registering, removing, enabling, or disabling tools via [`useRegisterTool`](/app-framework/hooks/use-register-tool).
+Returns a function to notify the host that a custom app-side tool list has changed, so the host runs `tools/list` again.
+
+Do not call this after [`useRegisterTool`](/app-framework/hooks/use-register-tool) operations. The MCP Apps dynamic registry sends the notification automatically after `registerTool()`, `update()`, `enable()`, `disable()`, and `remove()`.
 
 ## Import
 
@@ -31,19 +33,24 @@ function useSendToolListChanged(): () => Promise<void>
 ## Usage
 
 ```tsx
-import { useRegisterTool, useSendToolListChanged } from 'sunpeak';
+import { useAppTools, useSendToolListChanged } from 'sunpeak';
+import { useEffect, useState } from 'react';
 
 function DynamicTools() {
-  const registerTool = useRegisterTool();
+  const [canPing, setCanPing] = useState(false);
   const sendToolListChanged = useSendToolListChanged();
 
-  const addTool = () => {
-    registerTool("ping", { description: "Ping" }, () => ({
-      content: [{ type: "text", text: "pong" }],
-    }));
-    sendToolListChanged();
-  };
+  useAppTools({
+    tools: canPing ? [{ name: 'ping', description: 'Return pong.' }] : [],
+    onCallTool: async () => ({
+      content: [{ type: 'text', text: 'pong' }],
+    }),
+  });
 
-  return <button onClick={addTool}>Add Tool</button>;
+  useEffect(() => {
+    if (canPing) void sendToolListChanged();
+  }, [canPing, sendToolListChanged]);
+
+  return <button onClick={() => setCanPing(true)}>Add ping tool</button>;
 }
 ```

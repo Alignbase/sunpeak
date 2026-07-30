@@ -124,7 +124,7 @@ The host proxies select MCP requests between the View and the originating MCP se
 | `McpUiSandboxProxyReadyNotification` | `ui/notifications/sandbox-proxy-ready` | Sandbox proxy is ready to receive resource HTML |
 | `McpUiRequestTeardownNotification` | `ui/notifications/request-teardown` | App requests host to tear it down. Sent by [`requestTeardown`](/mcp-apps/app/requests#requestteardown). |
 | `LoggingMessageNotification` | `notifications/message` | Diagnostic log message. Sent by [`sendLog`](/mcp-apps/app/requests/send-log). |
-| `ToolListChangedNotification` | `notifications/tools/list_changed` | App-side tool list changed. Sent by [`sendToolListChanged`](/mcp-apps/app/requests#sendtoollistchanged) after `registerTool`, `enable`, `disable`, or `remove`. |
+| `ToolListChangedNotification` | `notifications/tools/list_changed` | App-side tool list changed. The dynamic registry sends it automatically; custom `onlisttools` implementations can use [`sendToolListChanged`](/mcp-apps/app/requests#sendtoollistchanged). |
 
 ## Union Types
 

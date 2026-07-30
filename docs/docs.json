@@ -5,7 +5,7 @@
   "colors": {
     "primary": "#000035",
     "light": "#ffb800",
-    "dark": "#000000"
+    "dark": "#b36b00"
   },
   "favicon": "/favicon.png",
   "redirects": [
@@ -279,6 +279,7 @@
             "pages": [
               "mcp-apps/introduction",
               "mcp-apps/lifecycle",
+              "mcp-apps/protocol-versions",
               "mcp-apps/layout",
               "mcp-apps/patterns",
               "mcp-apps/faq"

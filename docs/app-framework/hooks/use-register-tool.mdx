@@ -12,6 +12,8 @@ Returns a function to register tools that the host (or LLM) can call. Uses Stand
 
 For simpler static tool registration, see [`useAppTools`](/app-framework/hooks/use-app-tools). `useRegisterTool` provides lower-level control with dynamic registration and Standard Schema support.
 
+The underlying MCP Apps registry sends `notifications/tools/list_changed` automatically when you register, update, enable, disable, or remove a tool and the View declared `tools.listChanged`.
+
 ## Import
 
 ```tsx
@@ -77,12 +79,11 @@ function useRegisterTool(): (
 ## Usage
 
 ```tsx
-import { useRegisterTool, useSendToolListChanged } from 'sunpeak';
+import { useRegisterTool } from 'sunpeak';
 import { useEffect } from 'react';
 
 function SelectionTool({ selectedText }: { selectedText: string }) {
   const registerTool = useRegisterTool();
-  const sendToolListChanged = useSendToolListChanged();
 
   useEffect(() => {
     const handle = registerTool(
@@ -93,14 +94,12 @@ function SelectionTool({ selectedText }: { selectedText: string }) {
       })
     );
     if (handle) {
-      sendToolListChanged();
-      return () => {
-        handle.remove();
-        sendToolListChanged();
-      };
+      return () => handle.remove();
     }
-  }, [registerTool, sendToolListChanged, selectedText]);
+  }, [registerTool, selectedText]);
 
   return <div>Selection tool registered</div>;
 }
 ```
+
+Do not call [`useSendToolListChanged()`](/app-framework/hooks/use-send-tool-list-changed) after these registry operations. Use that lower-level hook only when you manage a custom `onlisttools` result.

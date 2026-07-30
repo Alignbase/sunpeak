@@ -35,9 +35,8 @@ Follow the same general styles and page structures as other pages in the same gr
 
 We welcome your contributions!
 
-For development quickstart on this package, see [DEVELOPMENT.md](./DEVELOPMENT.md).
+Run `mint dev` from this directory to preview documentation changes locally.
 
 ## Resources
 
 - [Mintlify Documentation](https://mintlify.com/docs)
-

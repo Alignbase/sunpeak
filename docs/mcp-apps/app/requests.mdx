@@ -333,7 +333,9 @@ handle.remove();
 
 ## sendToolListChanged
 
-Notify the host that the app's tool list has changed. Call this after `registerTool`, `remove()`, `enable()`, or `disable()`.
+Notify the host that a custom app-side tool list has changed. Use this when you implement `onlisttools` yourself and its result changes.
+
+The SDK's `registerTool()` registry and the returned handle's `update()`, `enable()`, `disable()`, and `remove()` methods send this notification automatically when `listChanged` is enabled. Do not send a duplicate notification after those calls.
 
 ```ts
 async sendToolListChanged(params?: {}): Promise<void>

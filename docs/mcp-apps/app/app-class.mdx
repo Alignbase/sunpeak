@@ -33,15 +33,51 @@ new App(appInfo, capabilities?, options?)
   <ResponseField name="autoResize" type="boolean" default="true">
     Automatically report size changes to the host using `ResizeObserver`.
   </ResponseField>
+  <ResponseField name="strict" type="boolean" default="false">
+    Throw when host-bound methods run before the initialization handshake completes. The default
+    logs a warning. Throwing is planned to become the SDK default in a future release.
+  </ResponseField>
+  <ResponseField name="allowUnsafeEval" type="boolean" default="false">
+    Allow schema parsing paths that require CSP `unsafe-eval`. Keep this disabled for normal MCP
+    App Views.
+  </ResponseField>
 </ResponseField>
 
 ```ts
 const app = new App(
   { name: "MyApp", version: "1.0.0" },
   { tools: { listChanged: true } },
-  { autoResize: true },
+  { autoResize: true, strict: true },
 );
 ```
+
+### Strict initialization checks
+
+Host-bound methods such as `callServerTool()`, `sendMessage()`, and `updateModelContext()` must run after `connect()` completes. Calling them earlier can race the `ui/initialize` handshake and leave a strict Host waiting for a View that never becomes ready.
+
+Use `strict: true` during development to turn this ordering mistake into an immediate error:
+
+```ts
+const app = new App(
+  { name: "MyApp", version: "1.0.0" },
+  {},
+  { strict: true },
+);
+
+app.ontoolresult = renderResult;
+await app.connect();
+
+// Host-bound methods are safe after connect() resolves.
+await app.updateModelContext({
+  content: [{ type: "text", text: "The View is ready." }],
+});
+```
+
+### CSP-safe schema parsing
+
+MCP App Views run under a restrictive Content Security Policy. By default, the SDK configures Zod's parser to avoid generated functions that require `unsafe-eval`.
+
+Keep `allowUnsafeEval` at its default `false` unless you control the Host CSP and have a measured reason to enable the faster JIT path. Setting it to `true` does not change the Host CSP, so parsing will still fail if the Host blocks `unsafe-eval`.
 
 ## connect()
 
@@ -71,6 +107,8 @@ await app.connect(new PostMessageTransport(window.parent, window.parent));
 <Warning>
 Register event handlers **before** calling `connect()` to avoid missing notifications during the handshake.
 </Warning>
+
+For the difference between the core MCP handshake, the View handshake, the SDK package version, and `appInfo.version`, see [Protocol Versions and Compatibility](/mcp-apps/protocol-versions).
 
 ## [Accessors](/mcp-apps/app/accessors)
 
