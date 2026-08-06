@@ -1,29 +1,75 @@
 ---
-title: "MCP Tools — Discovery, Schemas & Invocation"
-sidebarTitle: "Tools"
-description: "How MCP tools work: discovery via tools/list, input validation with JSON Schema, invocation via tools/call, and structured results."
-keywords: ["MCP tools", "tools/list", "tools/call", "JSON Schema", "tool invocation", "Model Context Protocol"]
+title: 'MCP Tools - Discovery, Schemas & Invocation'
+sidebarTitle: 'Tools'
+description: 'How MCP tools work: capabilities, paginated discovery, JSON Schema input validation, tools/call, structured results, task support, and errors.'
+keywords:
+  [
+    'MCP tools',
+    'tools/list',
+    'tools/call',
+    'JSON Schema',
+    'tool invocation',
+    'MCP tool errors',
+    'MCP task support',
+    'Model Context Protocol',
+  ]
 ---
 
 ## What Are MCP Tools?
 
-Tools are functions that an [MCP server](/mcp-apps/mcp/overview) exposes for AI models to call. They're the primary way servers provide actions — fetching data, running computations, modifying state, or triggering side effects. Hosts discover available tools when connecting and present them to the model as callable functions.
+Tools are functions that an [MCP server](/mcp-apps/mcp/overview) exposes for AI models to call. Servers use tools to fetch data, run computations, modify state, or trigger side effects. Hosts discover available tools and decide how to present them to the model and user.
 
-## Discovery (`tools/list`)
+<Note>
+  This page follows the core MCP `2025-11-25` specification. MCP Apps adds UI metadata to the normal
+  tool definition but keeps the same discovery, invocation, result, and error model.
+</Note>
 
-When a client connects, the host calls `tools/list` to discover the server's tools. Each tool declares:
+## Declare the Tools Capability
 
-| Field | Description |
-|-------|-------------|
-| `name` | Unique identifier (e.g., `"get-weather"`) |
-| `description` | What the tool does, for the model to read |
-| `inputSchema` | JSON Schema defining accepted parameters |
-| `outputSchema` | Optional JSON Schema defining `structuredContent` returned by the tool |
-| `annotations` | Hints about behavior (read-only, destructive, etc.) |
+A server that exposes tools declares the `tools` capability during initialization:
+
+```json
+{
+  "capabilities": {
+    "tools": {
+      "listChanged": true
+    }
+  }
+}
+```
+
+Set `listChanged` to `true` only when the server sends `notifications/tools/list_changed` after its available tools change. The client can then call `tools/list` again.
+
+## Discover Tools with `tools/list`
+
+The client calls `tools/list` to discover the server's tools. This operation supports opaque cursor pagination, so clients must continue while the response contains `nextCursor`.
+
+```json
+{
+  "method": "tools/list",
+  "params": {
+    "cursor": "opaque-cursor-from-the-previous-response"
+  }
+}
+```
+
+Each tool can declare:
+
+| Field          | Required | Description                                                                                 |
+| -------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `name`         | Yes      | Case-sensitive identifier. MCP recommends 1 to 128 ASCII letters, digits, `_`, `-`, or `.`. |
+| `title`        | No       | Human-readable display name.                                                                |
+| `description`  | No       | What the tool does, written for the model and user.                                         |
+| `icons`        | No       | Display icons with source, MIME type, size, and theme hints.                                |
+| `inputSchema`  | Yes      | JSON Schema for accepted arguments.                                                         |
+| `outputSchema` | No       | JSON Schema for returned `structuredContent`.                                               |
+| `annotations`  | No       | Untrusted behavior hints such as read-only or destructive.                                  |
+| `execution`    | No       | Execution metadata, including task support.                                                 |
 
 ```json
 {
   "name": "get-weather",
+  "title": "Get Weather",
   "description": "Get current weather for a location",
   "inputSchema": {
     "type": "object",
@@ -39,17 +85,37 @@ When a client connects, the host calls `tools/list` to discover the server's too
       "summary": { "type": "string" }
     },
     "required": ["temperatureC", "summary"]
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "openWorldHint": true
+  },
+  "execution": {
+    "taskSupport": "forbidden"
   }
 }
 ```
 
-## Input Schemas
+## Validate Tool Input on the Server
 
-Tools declare their parameters using [JSON Schema](https://json-schema.org/). The host validates arguments against the schema before invoking the tool. Schemas can also be defined with [Zod](https://zod.dev/) — the SDK auto-converts them to JSON Schema.
+Tools declare parameters with [JSON Schema](https://json-schema.org/). When `$schema` is omitted, MCP uses JSON Schema 2020-12. `inputSchema` must be an object, including for tools with no parameters:
 
-## Invocation (`tools/call`)
+```json
+{
+  "type": "object",
+  "additionalProperties": false
+}
+```
 
-The host calls `tools/call` with the tool name and validated arguments. The server executes the tool and returns a result.
+The server **MUST** validate every tool input. A client may validate arguments before sending them, but the server cannot rely on that check because clients and models are outside the server's trust boundary.
+
+Input that matches the JSON-RPC request shape but fails business validation should normally return a tool execution error with `isError: true`. A malformed `tools/call` request uses a JSON-RPC protocol error.
+
+TypeScript SDKs can accept schemas from libraries such as [Zod](https://zod.dev/) and convert them to JSON Schema.
+
+## Invoke a Tool with `tools/call`
+
+The client calls `tools/call` with the tool name and arguments. The server validates the arguments, checks authorization, executes the tool, and returns a result.
 
 ```json
 // Request
@@ -59,41 +125,87 @@ The host calls `tools/call` with the tool name and validated arguments. The serv
 { "content": [{ "type": "text", "text": "Tokyo: 22C, partly cloudy" }] }
 ```
 
-## Results
+## Return Tool Results
 
 Tool results commonly use these fields:
 
-- **`content`**: An array of content blocks (`text`, `image`, `audio`, resource links, or embedded resources) that text-only clients and models can read.
-- **`structuredContent`**: Optional typed data optimized for programmatic consumption. MCP Apps uses this to pass model-visible data to Views (see [Event Handlers](/mcp-apps/app/event-handlers#ontoolresult)).
-- **`isError`**: Optional flag for tool execution errors returned as a tool result.
-- **`_meta`**: Optional metadata for clients or components. Do not use it for facts the model must see.
+- `content`: Content blocks such as text, images, audio, resource links, or embedded resources.
+- `structuredContent`: Optional JSON object for typed programmatic data. MCP Apps can pass it to the View.
+- `isError`: Marks a tool execution error.
+- `_meta`: Optional client or component metadata. Do not use it for facts the model must read.
 
-When a tool returns `structuredContent`, MCP recommends also returning a serialized text block in `content` for compatibility. MCP Apps can then render `structuredContent` while text-only hosts still have usable output. Use `_meta` for component-only fields that the model should not see.
+When a tool returns `structuredContent`, MCP says it **SHOULD** also return serialized JSON in a text content block for backwards compatibility. If the tool declares `outputSchema`, the server **MUST** return `structuredContent` that conforms to it, and clients **SHOULD** validate the result.
 
-## Annotations
+See [Tool Results and Model Context](/mcp-apps/server/tool-results-model-context) for the MCP Apps split between `content`, `structuredContent`, and `_meta`.
+
+## Return Actionable Errors
+
+MCP separates two error types:
+
+| Error type           | Use it for                                                           | Shape                               |
+| -------------------- | -------------------------------------------------------------------- | ----------------------------------- |
+| Protocol error       | Unknown tool, malformed request, or server protocol failure.         | JSON-RPC `error`.                   |
+| Tool execution error | Invalid business input, upstream API failure, or tool logic failure. | Normal result with `isError: true`. |
+
+Tool execution errors should explain how the caller can fix the request because clients can pass that feedback to the model for a corrected retry.
+
+## Treat Annotations as Hints
 
 Tools can include annotations that help hosts decide how to handle them. These hints do not replace authorization or user confirmation for sensitive actions.
 
-| Annotation | Description |
-| ---------- | ----------- |
-| `title` | Short human-readable tool title. |
-| `readOnlyHint` | Tool does not modify state. |
-| `destructiveHint` | Tool may perform destructive operations, such as deletes or overwrites. |
-| `idempotentHint` | Calling the tool multiple times with the same arguments has the same effect. |
-| `openWorldHint` | Tool interacts with external systems outside the server's control. |
+| Annotation        | Description                                                                  |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `title`           | Short human-readable tool title.                                             |
+| `readOnlyHint`    | Tool does not modify state.                                                  |
+| `destructiveHint` | Tool may perform destructive operations, such as deletes or overwrites.      |
+| `idempotentHint`  | Calling the tool multiple times with the same arguments has the same effect. |
+| `openWorldHint`   | Tool interacts with external systems outside the server's control.           |
+
+Clients **MUST** treat annotations as untrusted unless they trust the server. Servers still need authentication, authorization, rate limits, input validation, and safe output handling.
+
+## Declare Task Support
+
+The optional `execution.taskSupport` field tells clients whether a tool supports MCP task-augmented execution:
+
+| Value         | Meaning                                                        |
+| ------------- | -------------------------------------------------------------- |
+| `"forbidden"` | The tool does not support task execution. This is the default. |
+| `"optional"`  | The caller may request task execution.                         |
+| `"required"`  | The caller must use task execution.                            |
+
+Task support belongs to the core MCP tool contract. It is separate from whether an MCP App tool renders a View.
 
 ## Related
 
 <Card horizontal title="registerAppTool" icon="page" href="/mcp-apps/server/register-app-tool">
   Register tools with UI metadata on the MCP server.
 </Card>
-<Card horizontal title="Tool and Resource Contract" icon="list-check" href="/mcp-apps/server/tool-resource-contract">
+<Card
+  horizontal
+  title="Tool and Resource Contract"
+  icon="list-check"
+  href="/mcp-apps/server/tool-resource-contract"
+>
   See how MCP App tools, UI resources, and tool results fit together.
 </Card>
-<Card horizontal title="Tool Annotations" icon="shield-check" href="/mcp-apps/server/tool-annotations">
+<Card
+  horizontal
+  title="Tool Annotations"
+  icon="shield-check"
+  href="/mcp-apps/server/tool-annotations"
+>
   Use read-only, destructive, idempotent, and external-system hints in MCP App servers.
+</Card>
+<Card
+  horizontal
+  title="Core MCP Tools Specification"
+  icon="link"
+  href="https://modelcontextprotocol.io/specification/2025-11-25/server/tools"
+>
+  Read the normative tools protocol and security requirements.
 </Card>
 
 <Tip>
-In the [sunpeak framework](/quickstart), tools are defined as individual files that are auto-discovered. See the [Tool File Reference](/app-framework/tools/tool-file).
+  In the [sunpeak framework](/quickstart), tools are defined as individual files that are
+  auto-discovered. See the [Tool File Reference](/app-framework/tools/tool-file).
 </Tip>

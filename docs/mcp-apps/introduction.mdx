@@ -1,8 +1,18 @@
 ---
-title: "MCP Apps - Build Interactive UIs for AI Chat Hosts"
-sidebarTitle: "Introduction"
-description: "Learn how to build MCP Apps that render interactive UIs inside ChatGPT, Claude, and other AI hosts. Covers the App class, event handlers, styling, React hooks, and the MCP Apps protocol."
-keywords: ["MCP Apps", "ChatGPT Apps", "ChatGPT plugins", "Claude Apps", "MCP app framework", "ChatGPT app framework", "Claude Connectors", "interactive UI"]
+title: 'MCP Apps - Build Interactive UIs for AI Chat Hosts'
+sidebarTitle: 'Introduction'
+description: 'Learn how to build MCP Apps that render interactive UIs inside ChatGPT, Claude, and other AI hosts. Covers the App class, event handlers, styling, React hooks, and the MCP Apps protocol.'
+keywords:
+  [
+    'MCP Apps',
+    'ChatGPT Apps',
+    'ChatGPT plugins',
+    'Claude Apps',
+    'MCP app framework',
+    'ChatGPT app framework',
+    'Claude Connectors',
+    'interactive UI',
+  ]
 ---
 
 <Note>This documentation covers MCP Apps SDK v1.7.5 (`@modelcontextprotocol/ext-apps`).</Note>
@@ -113,9 +123,11 @@ Views declare which modes they support; Hosts declare which they can provide. Th
 
 ## How are MCP Apps secured?
 
-All Views run in sandboxed iframes with no access to the Host's DOM, cookies, or storage. Communication happens only through `postMessage`, making it auditable.
+All Views run in separate-origin sandboxed iframes with no access to the Host's DOM, cookies, or storage. The Host validates and mediates JSON-RPC messages sent through `postMessage`.
 
 Servers declare which network domains their UI needs via [CSP metadata](/mcp-apps/server/resource-meta#csp--content-security-policy). Hosts enforce these declarations — if no domains are declared, no external connections are allowed.
+
+Start with the [MCP Apps Security Model](/mcp-apps/security) for the trust boundaries, tool authorization rules, result-data audiences, and pre-ship checks. Use [CSP and CORS](/mcp-apps/server/csp-cors) when configuring external origins.
 
 ## More questions?
 

@@ -1,45 +1,92 @@
 ---
-title: "MCP Resources — URIs, MIME Types & Reading"
-sidebarTitle: "Resources"
-description: "How MCP resources work: discovery via resources/list, URI schemes, MIME types, reading via resources/read, and how MCP Apps uses resources for UI delivery."
-keywords: ["MCP resources", "resources/list", "resources/read", "URI", "MIME type", "Model Context Protocol"]
+title: 'MCP Resources - URIs, Templates & Reading'
+sidebarTitle: 'Resources'
+description: 'How MCP resources work: capabilities, paginated discovery, URI templates, subscriptions, annotations, resources/read, and MCP App UI delivery.'
+keywords:
+  [
+    'MCP resources',
+    'resources/list',
+    'resources/read',
+    'MCP resource templates',
+    'MCP resource subscriptions',
+    'URI',
+    'MIME type',
+    'Model Context Protocol',
+  ]
 ---
 
 ## What Are MCP Resources?
 
-Resources are data that an [MCP server](/mcp-apps/mcp/overview) exposes for reading. Each resource is identified by a URI and has a MIME type. Unlike [tools](/mcp-apps/mcp/tools) (which execute actions), resources represent data that can be fetched — files, structured data, or (in MCP Apps) interactive HTML UIs.
+Resources are data that an [MCP server](/mcp-apps/mcp/overview) exposes for reading. Each resource has a URI and can include a MIME type. Unlike [tools](/mcp-apps/mcp/tools), which execute code, resources represent data that a client can fetch, such as files, records, or MCP App HTML.
 
-## Discovery (`resources/list`)
+<Note>
+  This page follows the core MCP `2025-11-25` specification. MCP Apps uses the same resource
+  protocol and adds the `ui://` URI scheme, an HTML profile MIME type, and UI metadata.
+</Note>
 
-The host calls `resources/list` to discover available resources. Each resource declares:
+## Declare the Resources Capability
 
-| Field | Description |
-|-------|-------------|
-| `uri` | Unique identifier (e.g., `"ui://weather/view.html"`) |
-| `name` | Human-readable name |
-| `description` | What the resource contains |
-| `mimeType` | Content type (e.g., `"text/html"`, `"application/json"`) |
+A server that exposes resources declares the `resources` capability during initialization:
+
+```json
+{
+  "capabilities": {
+    "resources": {
+      "subscribe": true,
+      "listChanged": true
+    }
+  }
+}
+```
+
+- `subscribe` means clients can subscribe to resource updates.
+- `listChanged` means the server can notify clients when the available resource list changes.
+
+## Discover Resources with `resources/list`
+
+The client calls `resources/list` to discover available resources. This operation supports opaque cursor pagination, so clients must continue while the response contains `nextCursor`.
+
+```json
+{
+  "method": "resources/list",
+  "params": {
+    "cursor": "opaque-cursor-from-the-previous-response"
+  }
+}
+```
+
+Each resource can declare:
+
+| Field         | Required | Description                                                  |
+| ------------- | -------- | ------------------------------------------------------------ |
+| `uri`         | Yes      | Unique resource identifier.                                  |
+| `name`        | Yes      | Programmatic or human-readable resource name.                |
+| `title`       | No       | Human-readable display title.                                |
+| `description` | No       | What the resource contains.                                  |
+| `icons`       | No       | Display icons with source, MIME type, size, and theme hints. |
+| `mimeType`    | No       | Content type such as `text/markdown` or `application/json`.  |
+| `size`        | No       | Resource size in bytes.                                      |
+| `annotations` | No       | Audience, priority, and last-modified hints.                 |
 
 ```json
 {
   "uri": "ui://weather/view.html",
-  "name": "Weather View",
+  "name": "weather_view",
+  "title": "Weather Forecast",
   "description": "Interactive weather display",
   "mimeType": "text/html;profile=mcp-app"
 }
 ```
 
-## URIs
+## Use URIs and URI Templates
 
-Resources are identified by URIs. Servers can use any URI scheme. MCP Apps uses the `ui://` scheme to identify UI resources that should be rendered in iframes.
+Servers can use any URI scheme they know how to read. MCP Apps reserves `ui://` for View resources.
 
-## MIME Types
+Parameterized resources use URI templates. Servers list them with `resources/templates/list`, which also supports cursor pagination. A template such as `weather://forecast/{city}` describes a family of readable resource URIs without listing every possible city.
 
-Each resource declares its content type via `mimeType`. MCP Apps uses the MIME type `text/html;profile=mcp-app` (exported as `RESOURCE_MIME_TYPE`) to identify HTML resources that hosts should render as interactive Views.
+## Read Resources with `resources/read`
 
-## Reading (`resources/read`)
-
-The host calls `resources/read` with a resource URI to fetch its contents. The server returns an array of content items.
+The client calls `resources/read` with a resource URI. The server returns one or more content items. Text resources use `text`; binary resources use base64-encoded `blob`.
 
 ```json
 // Request
@@ -55,9 +102,27 @@ The host calls `resources/read` with a resource URI to fetch its contents. The s
 }
 ```
 
-## In MCP Apps
+## Add Resource Annotations
 
-MCP Apps extends resources with `_meta.ui` metadata on content items. This lets servers declare security policies (CSP), iframe permissions, rendering preferences, and stable sandbox origins for their UIs.
+Resources, resource templates, and resource content can carry annotations:
+
+| Annotation     | Meaning                                             |
+| -------------- | --------------------------------------------------- |
+| `audience`     | Intended readers, `"user"`, `"assistant"`, or both. |
+| `priority`     | Relative importance from `0.0` to `1.0`.            |
+| `lastModified` | ISO 8601 modification time.                         |
+
+Annotations are hints. Clients decide whether to filter, rank, or display resources based on them.
+
+## Subscribe to Changes
+
+When the server advertises `subscribe: true`, clients can send `resources/subscribe` for a URI. The server then sends `notifications/resources/updated` when that resource changes. Clients stop updates with `resources/unsubscribe`.
+
+When the server advertises `listChanged: true`, it can send `notifications/resources/list_changed` after resources are added or removed. The client should call `resources/list` again instead of assuming what changed.
+
+## Deliver MCP App Views
+
+MCP Apps requires the MIME type `text/html;profile=mcp-app`, exported as `RESOURCE_MIME_TYPE`, for HTML Views. Resource content can include `_meta.ui` for CSP, iframe permissions, rendering preferences, and stable sandbox origins:
 
 ```json
 {
@@ -73,9 +138,26 @@ MCP Apps extends resources with `_meta.ui` metadata on content items. This lets 
 }
 ```
 
-<Card horizontal title="registerAppResource" icon="page" href="/mcp-apps/server/register-app-resource">
+UI-only resources may be omitted from `resources/list` because MCP Apps hosts primarily discover them through the calling tool's `_meta.ui.resourceUri`. The resource must still exist, and the host must be able to fetch that exact URI with `resources/read`.
+
+## Related
+
+<Card
+  horizontal
+  title="registerAppResource"
+  icon="page"
+  href="/mcp-apps/server/register-app-resource"
+>
   Register HTML resources on the MCP server.
 </Card>
 <Card horizontal title="Resource _meta" icon="page" href="/mcp-apps/server/resource-meta">
-  CSP, permissions, domain, and rendering metadata.
+  Configure CSP, permissions, domain, and rendering metadata.
+</Card>
+<Card
+  horizontal
+  title="Core MCP Resources Specification"
+  icon="link"
+  href="https://modelcontextprotocol.io/specification/2025-11-25/server/resources"
+>
+  Read the normative resource protocol, templates, subscriptions, and annotations.
 </Card>
