@@ -5,12 +5,20 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
 minimumReleaseAgeExclude:
-  - '@ai-sdk/google@4.0.24'
+  - '@ai-sdk/google@4.0.37'
   - '@modelcontextprotocol/sdk@1.30.0'
+  - '@ai-sdk/anthropic@4.0.34'
+  - '@ai-sdk/gateway@4.0.44'
+  - '@ai-sdk/openai@4.0.34'
+  - ai@7.0.56
+  - mapbox-gl@3.28.1
+  - tsx@4.23.10
+  - vite@8.2.1
 overrides:
   '@hono/node-server': 2.0.11
   body-parser: 2.3.0
   fast-uri: 3.1.5
   hono: ^4.12.34
+  js-yaml: 4.3.1
   lodash: 4.18.1
   minimatch: 10.2.5
