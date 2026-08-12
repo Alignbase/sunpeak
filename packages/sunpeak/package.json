@@ -159,7 +159,7 @@
     "tailwind",
     "sunpeak"
   ],
-  "author": "Sunpeak AI",
+  "author": "Alignbase Inc.",
   "license": "MIT",
   "peerDependencies": {
     "@ai-sdk/google": "^4.0.37",
