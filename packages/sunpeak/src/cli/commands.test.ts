@@ -191,7 +191,7 @@ describe('CLI Commands', () => {
       });
 
       expect(execSyncMock).toHaveBeenCalledWith(
-        'npx skills add Sunpeak-AI/sunpeak@create-sunpeak-app Sunpeak-AI/sunpeak@test-mcp-server',
+        'npx skills add Alignbase/sunpeak@create-sunpeak-app Alignbase/sunpeak@test-mcp-server',
         expect.objectContaining({ cwd: path.join('/test', 'my-project'), stdio: 'inherit' })
       );
     });
@@ -647,7 +647,7 @@ describe('CLI Commands', () => {
       );
 
       expect(execSyncMock).toHaveBeenCalledWith(
-        'pnpm dlx skills add Sunpeak-AI/sunpeak@test-mcp-server',
+        'pnpm dlx skills add Alignbase/sunpeak@test-mcp-server',
         expect.objectContaining({ cwd: '/test/project', stdio: 'inherit' })
       );
     });
@@ -665,7 +665,7 @@ describe('CLI Commands', () => {
       );
 
       expect(execSyncMock).not.toHaveBeenCalledWith(
-        'pnpm dlx skills add Sunpeak-AI/sunpeak@test-mcp-server',
+        'pnpm dlx skills add Alignbase/sunpeak@test-mcp-server',
         expect.anything()
       );
     });
@@ -687,7 +687,7 @@ describe('CLI Commands', () => {
       );
 
       expect(logInfoMock).toHaveBeenCalledWith(
-        'Skill install skipped. Install later: pnpm dlx skills add Sunpeak-AI/sunpeak@test-mcp-server'
+        'Skill install skipped. Install later: pnpm dlx skills add Alignbase/sunpeak@test-mcp-server'
       );
     });
 

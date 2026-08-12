@@ -1,6 +1,6 @@
 # sunpeak-app
 
-An MCP App built with [sunpeak](https://github.com/Sunpeak-AI/sunpeak).
+An MCP App built with [sunpeak](https://github.com/Alignbase/sunpeak).
 
 For an initial overview of your new app and a detailed API reference, refer to the [documentation](https://sunpeak.ai/docs/app-framework/project-scaffold).
 
@@ -160,7 +160,7 @@ Then create a tool file in `src/tools/` and simulation file(s) in `tests/simulat
 Install the sunpeak skills to give your coding agent built-in knowledge of sunpeak patterns, hooks, and testing:
 
 ```bash
-pnpm dlx skills add Sunpeak-AI/sunpeak@create-sunpeak-app Sunpeak-AI/sunpeak@test-mcp-server
+pnpm dlx skills add Alignbase/sunpeak@create-sunpeak-app Alignbase/sunpeak@test-mcp-server
 ```
 
 ## Troubleshooting
@@ -177,7 +177,7 @@ Full guide: [sunpeak.ai/docs/app-framework/guides/troubleshooting](https://sunpe
 
 ## Resources
 
-- [sunpeak](https://github.com/Sunpeak-AI/sunpeak)
+- [sunpeak](https://github.com/Alignbase/sunpeak)
 - [MCP Apps Documentation](https://sunpeak.ai/docs/mcp-apps/introduction)
 - [MCP Overview](https://sunpeak.ai/docs/mcp-apps/mcp/overview) · [Tools](https://sunpeak.ai/docs/mcp-apps/mcp/tools) · [Resources](https://sunpeak.ai/docs/mcp-apps/mcp/resources)
 - [MCP Apps SDK](https://github.com/modelcontextprotocol/ext-apps)

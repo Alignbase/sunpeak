@@ -12,7 +12,7 @@ Sunpeak is a React framework built on `@modelcontextprotocol/ext-apps` for build
 Clone the sunpeak repo for working examples:
 
 ```bash
-git clone --depth 1 https://github.com/Sunpeak-AI/sunpeak /tmp/sunpeak
+git clone --depth 1 https://github.com/Alignbase/sunpeak /tmp/sunpeak
 ```
 
 Template app lives at `/tmp/sunpeak/packages/sunpeak/template/`. This is the canonical project structure — read it first.
@@ -573,7 +573,7 @@ These variables use CSS `light-dark()` so they respond to theme changes automati
 For all testing capabilities (e2e tests, visual regression, live tests against real ChatGPT, multi-model evals, Playwright config), install the `test-mcp-server` skill:
 
 ```bash
-pnpm dlx skills add Sunpeak-AI/sunpeak@test-mcp-server
+pnpm dlx skills add Alignbase/sunpeak@test-mcp-server
 ```
 
 The testing skill works with any MCP server (not just sunpeak projects). Simulations (above) are part of the dev workflow and defined here. Tests consume them via the `mcp` fixture.

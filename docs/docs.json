@@ -507,7 +507,7 @@
       "anchors": [
         {
           "anchor": "GitHub",
-          "href": "https://github.com/Sunpeak-AI/sunpeak",
+          "href": "https://github.com/Alignbase/sunpeak",
           "icon": "github"
         },
         {
@@ -532,7 +532,7 @@
     "links": [
       {
         "label": "Source",
-        "href": "https://github.com/Sunpeak-AI/sunpeak/tree/main/docs"
+        "href": "https://github.com/Alignbase/sunpeak/tree/main/docs"
       }
     ]
   },
@@ -541,7 +541,7 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/Sunpeak-AI/sunpeak",
+      "github": "https://github.com/Alignbase/sunpeak",
       "website": "https://sunpeak.ai"
     }
   },

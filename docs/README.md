@@ -1,6 +1,6 @@
 # sunpeak Documentation
 
-Official documentation for [sunpeak](https://github.com/Sunpeak-AI/sunpeak) - The MCP Apps framework.
+Official documentation for [sunpeak](https://github.com/Alignbase/sunpeak) - The MCP Apps framework.
 
 ## Local Development
 

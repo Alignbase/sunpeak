@@ -27,7 +27,7 @@ sunpeak test init --server "python server.py"         # Command-based server
 Clone the sunpeak repo for working test examples:
 
 ```bash
-git clone --depth 1 https://github.com/Sunpeak-AI/sunpeak /tmp/sunpeak
+git clone --depth 1 https://github.com/Alignbase/sunpeak /tmp/sunpeak
 ```
 
 Test examples live at `/tmp/sunpeak/packages/sunpeak/template/tests/`. This includes e2e tests, simulations, evals, and live tests.

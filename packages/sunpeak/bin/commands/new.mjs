@@ -405,12 +405,12 @@ export async function init(projectName, resourcesArg, deps = defaultDeps) {
     if (!clack.isCancel(installSkill) && installSkill) {
       const dlx = pm === 'yarn' ? 'yarn dlx' : pm === 'npm' ? 'npx' : 'pnpm dlx';
       try {
-        d.execSync(`${dlx} skills add Sunpeak-AI/sunpeak@create-sunpeak-app Sunpeak-AI/sunpeak@test-mcp-server`, {
+        d.execSync(`${dlx} skills add Alignbase/sunpeak@create-sunpeak-app Alignbase/sunpeak@test-mcp-server`, {
           cwd: targetDir,
           stdio: 'inherit',
         });
       } catch {
-        d.console.log(`Skill install skipped. You can install later with: ${dlx} skills add Sunpeak-AI/sunpeak@create-sunpeak-app Sunpeak-AI/sunpeak@test-mcp-server`);
+        d.console.log(`Skill install skipped. You can install later with: ${dlx} skills add Alignbase/sunpeak@create-sunpeak-app Alignbase/sunpeak@test-mcp-server`);
       }
     }
   }

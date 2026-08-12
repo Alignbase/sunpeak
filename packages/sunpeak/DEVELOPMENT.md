@@ -7,7 +7,7 @@ Refer to the [documentation](https://sunpeak.ai/docs) to ramp up on sunpeak.
 Requirements: Node (20+), pnpm (10+), git
 
 ```bash
-git clone https://github.com/Sunpeak-AI/sunpeak.git
+git clone https://github.com/Alignbase/sunpeak.git
 cd sunpeak && pnpm install
 pnpm dev
 ```

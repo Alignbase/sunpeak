@@ -10,9 +10,9 @@
 
 [![npm version](https://img.shields.io/npm/v/sunpeak.svg?style=flat&color=FFB800&labelColor=000035)](https://www.npmjs.com/package/sunpeak)
 [![npm downloads](https://img.shields.io/npm/dm/sunpeak.svg?style=flat&color=FFB800&labelColor=000035)](https://www.npmjs.com/package/sunpeak)
-[![stars](https://img.shields.io/github/stars/Sunpeak-AI/sunpeak?style=flat&color=FFB800&labelColor=000035)](https://github.com/Sunpeak-AI/sunpeak)
-[![CI](https://img.shields.io/github/actions/workflow/status/Sunpeak-AI/sunpeak/ci.yml?branch=main&style=flat&label=ci&color=FFB800&labelColor=000035)](https://github.com/Sunpeak-AI/sunpeak/actions)
-[![License](https://img.shields.io/npm/l/sunpeak.svg?style=flat&color=FFB800&labelColor=000035)](https://github.com/Sunpeak-AI/sunpeak/blob/main/LICENSE)
+[![stars](https://img.shields.io/github/stars/Alignbase/sunpeak?style=flat&color=FFB800&labelColor=000035)](https://github.com/Alignbase/sunpeak)
+[![CI](https://img.shields.io/github/actions/workflow/status/Alignbase/sunpeak/ci.yml?branch=main&style=flat&label=ci&color=FFB800&labelColor=000035)](https://github.com/Alignbase/sunpeak/actions)
+[![License](https://img.shields.io/npm/l/sunpeak.svg?style=flat&color=FFB800&labelColor=000035)](https://github.com/Alignbase/sunpeak/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?style=flat&logo=typescript&label=ts&color=FFB800&logoColor=white&labelColor=000035)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-blue?style=flat&logo=react&label=react&color=FFB800&logoColor=white&labelColor=000035)](https://reactjs.org/)
 
@@ -30,7 +30,7 @@ npx sunpeak new
 [Demo (Video)](https://cdn.sunpeak.ai/sunpeak-demo-prod.mp4) ~
 [Discord](https://discord.gg/FB2QNXqRnw) ~
 [Documentation](https://sunpeak.ai/docs) ~
-[GitHub](https://github.com/Sunpeak-AI/sunpeak)
+[GitHub](https://github.com/Alignbase/sunpeak)
 
 ## Why sunpeak
 

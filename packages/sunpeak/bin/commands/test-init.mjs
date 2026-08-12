@@ -164,13 +164,13 @@ export async function testInit(args = [], deps = defaultDeps) {
       const pm = d.detectPackageManager();
       const dlx = pm === 'yarn' ? 'yarn dlx' : pm === 'npm' ? 'npx' : 'pnpm dlx';
       try {
-        d.execSync(`${dlx} skills add Sunpeak-AI/sunpeak@test-mcp-server`, {
+        d.execSync(`${dlx} skills add Alignbase/sunpeak@test-mcp-server`, {
           cwd: d.cwd(),
           stdio: 'inherit',
         });
       } catch {
         d.log.info(
-          `Skill install skipped. Install later: ${dlx} skills add Sunpeak-AI/sunpeak@test-mcp-server`
+          `Skill install skipped. Install later: ${dlx} skills add Alignbase/sunpeak@test-mcp-server`
         );
       }
     }

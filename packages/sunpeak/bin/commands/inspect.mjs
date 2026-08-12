@@ -3574,7 +3574,7 @@ export async function inspectServer(opts) {
   if (!noBegging) {
     // #FFB800 in 24-bit ANSI color
     console.log(
-      '\n\x1b[38;2;255;184;0m\u2b50\ufe0f \u2192 \u2764\ufe0f  https://github.com/Sunpeak-AI/sunpeak\x1b[0m\n'
+      '\n\x1b[38;2;255;184;0m\u2b50\ufe0f \u2192 \u2764\ufe0f  https://github.com/Alignbase/sunpeak\x1b[0m\n'
     );
   }
 

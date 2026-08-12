@@ -215,10 +215,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Sunpeak-AI/sunpeak"
+    "url": "https://github.com/Alignbase/sunpeak"
   },
   "bugs": {
-    "url": "https://github.com/Sunpeak-AI/sunpeak/issues"
+    "url": "https://github.com/Alignbase/sunpeak/issues"
   },
   "homepage": "https://sunpeak.ai/"
 }
