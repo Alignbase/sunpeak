@@ -9,6 +9,13 @@ keywords: ["MCP", "Model Context Protocol", "MCP server", "MCP client", "MCP hos
 
 The Model Context Protocol (MCP) is an open standard for connecting AI models to external data and capabilities. It defines how AI hosts like ChatGPT and Claude communicate with servers that expose [tools](/mcp-apps/mcp/tools) and [resources](/mcp-apps/mcp/resources).
 
+<Note>
+  sunpeak 0.20.x uses core MCP `2025-11-25`, so the lifecycle examples on this page show
+  that revision. The current core specification is `2026-07-28`, which uses self-contained
+  requests instead of the handshake and protocol session shown below. See [MCP 2026-07-28 for
+  MCP Apps](/mcp-apps/mcp/2026-07-28).
+</Note>
+
 ## Architecture
 
 ```mermaid actions={false}
@@ -36,7 +43,7 @@ MCP defines two standard transports:
 - **stdio** — Communication over standard input/output. Used for local servers running as subprocesses.
 - **Streamable HTTP** — Communication over HTTP with server-sent events. Used for remote servers accessible over the network.
 
-## Connection Lifecycle
+## sunpeak 0.20.x Connection Lifecycle
 
 ```mermaid actions={false}
 sequenceDiagram
@@ -57,6 +64,12 @@ sequenceDiagram
 2. The server responds with its own capabilities and the negotiated protocol version. The response can also include an optional `instructions` string the host may surface to the model (e.g., as part of the system prompt) to describe cross-tool relationships and constraints.
 3. The client sends `notifications/initialized` to confirm the session is ready.
 4. Requests flow in both directions for the duration of the session.
+
+## Core MCP 2026-07-28 Lifecycle
+
+The current core revision has no `initialize` handshake or `Mcp-Session-Id`. Each request includes its protocol version, client identity, and client capabilities. Servers implement `server/discover` for optional up-front capability discovery, and clients can retry with a supported version when needed.
+
+This change does not remove the MCP Apps View's separate `ui/initialize` handshake. Read [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28) before updating a server or SDK.
 
 ## What Can Servers Expose?
 

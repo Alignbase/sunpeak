@@ -15,6 +15,13 @@ import { App } from "@modelcontextprotocol/ext-apps";
 
 `createSamplingMessage` lets the View ask the host to run an LLM completion via standard MCP [`sampling/createMessage`](https://modelcontextprotocol.io/specification/server/sampling). The host owns the model connection, so apps don't ship their own API keys and don't pick the model — the user's host does.
 
+<Note>
+  This View-to-Host method remains part of the MCP Apps `2026-01-26` protocol. Core MCP
+  `2026-07-28` deprecated Sampling for new client and server implementations and replaced the
+  standalone server-to-client request with MRTR, but that does not remove the MCP Apps View API.
+  See [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28#server-to-client-requests-use-mrtr).
+</Note>
+
 Use it for:
 
 - **Summaries and rewrites** of content the user is looking at in the app

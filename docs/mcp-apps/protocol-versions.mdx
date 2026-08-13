@@ -16,18 +16,18 @@ keywords:
 
 <Badge color="green">MCP Apps SDK</Badge>
 
-MCP Apps use two protocol connections: the Host connects to the MCP server, then the View connects to the Host over `postMessage`. Each connection has its own initialization handshake and protocol version.
+MCP Apps use two protocol connections: the Host connects to the MCP server, then the View connects to the Host over `postMessage`. Each connection has its own protocol version. The core MCP lifecycle depends on the negotiated revision, while the MCP Apps connection has its own initialization handshake.
 
 This distinction matters when an app works as a normal MCP tool but its UI does not render, or when the View renders but a host-mediated feature is missing.
 
 ## The Four Versions
 
-| Version              | Example                                | Where it appears               | What it controls                                                    |
-| -------------------- | -------------------------------------- | ------------------------------ | ------------------------------------------------------------------- |
-| Core MCP protocol    | `2025-11-25`                           | Host ↔ MCP server `initialize` | Tools, resources, transport, and core MCP capabilities              |
-| MCP Apps protocol    | `2026-01-26`                           | View ↔ Host `ui/initialize`    | View lifecycle, host context, app capabilities, and `ui/*` messages |
-| MCP Apps SDK package | `@modelcontextprotocol/ext-apps@1.7.5` | `package.json`                 | The implementation and APIs your code uses                          |
-| Your app version     | `1.4.0`                                | `appInfo.version`              | Your View's identity, not protocol compatibility                    |
+| Version              | Example                                               | Where it appears                                      | What it controls                                                    |
+| -------------------- | ----------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------- |
+| Core MCP protocol    | Latest: `2026-07-28`; sunpeak 0.20.x: `2025-11-25`    | Host ↔ MCP server requests                            | Tools, resources, transport, and core MCP capabilities              |
+| MCP Apps protocol    | `2026-01-26`                                          | View ↔ Host `ui/initialize`                           | View lifecycle, host context, app capabilities, and `ui/*` messages |
+| MCP Apps SDK package | `@modelcontextprotocol/ext-apps@1.7.5`                | `package.json`                                        | The implementation and APIs your code uses                          |
+| Your app version     | `1.4.0`                                               | `appInfo.version`                                     | Your View's identity, not protocol compatibility                    |
 
 The date-based protocol versions are independent. A Host can support a given core MCP version without supporting MCP Apps, and an MCP Apps-capable Host may expose only some optional View APIs.
 
@@ -36,7 +36,7 @@ The date-based protocol versions are independent. A Host can support a given cor
   handshake instead of copying this string into View code.
 </Note>
 
-## Two Initialization Handshakes
+## Two Independent Protocol Layers
 
 ```mermaid
 sequenceDiagram
@@ -44,9 +44,14 @@ sequenceDiagram
     participant H as Host
     participant S as MCP Server
 
-    H->>S: initialize (core MCP protocolVersion)
-    S-->>H: negotiated core version and server capabilities
-    H->>S: notifications/initialized
+    alt Core MCP 2025-11-25, used by sunpeak 0.20.x
+        H->>S: initialize (core MCP protocolVersion)
+        S-->>H: negotiated core version and server capabilities
+        H->>S: notifications/initialized
+    else Core MCP 2026-07-28
+        H->>S: request (protocol version and capabilities in _meta)
+        S-->>H: result
+    end
 
     Note over H,S: Host discovers tools and ui:// resources
 
@@ -55,7 +60,7 @@ sequenceDiagram
     V->>H: ui/notifications/initialized
 ```
 
-### 1. Host ↔ Server
+### 1. Host ↔ Server in sunpeak 0.20.x
 
 The core MCP `initialize` request negotiates the core protocol version. An MCP Apps Host also advertises the UI extension under `capabilities.extensions`:
 
@@ -80,6 +85,8 @@ The core MCP `initialize` request negotiates the core protocol version. An MCP A
 ```
 
 Servers should check this extension before returning MCP Apps metadata. [`getUiCapability()`](/mcp-apps/server/capability-detection) reads the extension without tying your server to a specific Host name.
+
+Core MCP `2026-07-28` removes this handshake and carries the version, identity, and capabilities on each request. sunpeak 0.20.x uses the v1 MCP SDK and does not yet speak that modern wire protocol. See [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28) for the compatibility boundary and migration checklist.
 
 ### 2. View ↔ Host
 
@@ -151,11 +158,14 @@ Use feature checks instead of Host-name checks. A Host can add capabilities with
     Stable extension specification for resources, metadata, lifecycle, and View messages.
   </Card>
   <Card
-    title="Core MCP Lifecycle"
+    title="Core MCP 2026-07-28 Versioning"
     icon="link"
-    href="https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle"
+    href="https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning"
   >
-    Core MCP initialization and protocol version negotiation.
+    Current per-request version negotiation and legacy compatibility.
+  </Card>
+  <Card title="MCP 2026-07-28 for MCP Apps" icon="page" href="/mcp-apps/mcp/2026-07-28">
+    What the stateless core revision changes for servers and what stays the same for Views.
   </Card>
   <Card title="Protocol Reference" icon="page" href="/mcp-apps/types/protocol-reference">
     MCP Apps types, schemas, method constants, and current SDK protocol constant.

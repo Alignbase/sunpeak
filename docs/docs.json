@@ -456,7 +456,12 @@
           },
           {
             "group": "MCP",
-            "pages": ["mcp-apps/mcp/overview", "mcp-apps/mcp/resources", "mcp-apps/mcp/tools"]
+            "pages": [
+              "mcp-apps/mcp/overview",
+              "mcp-apps/mcp/2026-07-28",
+              "mcp-apps/mcp/resources",
+              "mcp-apps/mcp/tools"
+            ]
           },
           {
             "group": "React",

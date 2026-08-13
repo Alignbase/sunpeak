@@ -1,0 +1,145 @@
+---
+title: 'MCP 2026-07-28 for MCP Apps'
+sidebarTitle: 'MCP 2026-07-28'
+description: 'Compatibility guide for MCP Apps on the MCP 2026-07-28 protocol: stateless requests, server/discover, required HTTP headers, caching, MRTR, and the unchanged ui/initialize View handshake.'
+keywords:
+  [
+    'MCP 2026-07-28',
+    'MCP Apps 2026-07-28',
+    'MCP stateless protocol',
+    'server/discover',
+    'Mcp-Method',
+    'Mcp-Name',
+    'MCP v2 migration',
+    'MCP Apps compatibility',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+MCP `2026-07-28` is the current core protocol revision. It replaces the Host-to-server handshake and protocol session with self-contained requests. The stable MCP Apps View protocol remains `2026-01-26` and still uses `ui/initialize` between the View and Host.
+
+Those are separate protocol layers, so updating an MCP server does not remove the View handshake.
+
+## Version Status
+
+| Layer | Current standard | sunpeak 0.20.x |
+| --- | --- | --- |
+| Host ↔ MCP server | Core MCP `2026-07-28` | Core MCP `2025-11-25` through `@modelcontextprotocol/sdk` v1.30 |
+| View ↔ Host | MCP Apps `2026-01-26` | MCP Apps `2026-01-26` through `@modelcontextprotocol/ext-apps` v1.7.5 |
+
+<Warning>
+  sunpeak's `--stateless` option creates a fresh v1 MCP server for each HTTP request, but it does
+  not enable the `2026-07-28` wire protocol. A server can be stateless at the application or
+  transport layer while still speaking the handshake-based `2025-11-25` revision.
+</Warning>
+
+The MCP TypeScript SDK implements the 2026 revision in its v2 API. `@modelcontextprotocol/ext-apps@1.7.5` depends on the v1 MCP SDK, so do not upgrade one package independently in a sunpeak project.
+
+## What Changed in Core MCP
+
+### Requests replace the protocol session
+
+Core MCP `2026-07-28` removes `initialize`, `notifications/initialized`, and the `Mcp-Session-Id` header. Each request carries its protocol version and client capabilities in `_meta`. Clients should also send their identity with the request.
+
+Servers must implement `server/discover`, which returns supported protocol versions, capabilities, identity, and optional instructions. A client may call it before other methods, but it can instead send its preferred version and retry after an `UnsupportedProtocolVersionError`.
+
+This change applies only to the Host ↔ server connection. An MCP App View still calls `app.connect()`, which sends `ui/initialize` and `ui/notifications/initialized` over `postMessage`.
+
+### HTTP requests are routable without reading the body
+
+Streamable HTTP requests for the 2026 revision include:
+
+- `MCP-Protocol-Version` with the requested protocol revision.
+- `Mcp-Method` with the JSON-RPC method, such as `tools/call`.
+- `Mcp-Name` with `params.name` for `tools/call` and `prompts/get`, or `params.uri` for `resources/read`.
+
+Servers must reject a request when these headers disagree with the JSON-RPC body. Gateways can use them for routing and authorization without parsing the body.
+
+### Lists and resource reads are cacheable
+
+Completed results for `server/discover`, list methods, and `resources/read` include `ttlMs` and `cacheScope`. Use `cacheScope: "public"` only when every authorization context receives the same result. User-specific tool lists, resource lists, and UI resource HTML need `"private"` caching.
+
+This matters for MCP App resources because a Host may cache the `ui://` HTML returned by `resources/read`. Keep user data in tool results or app-only requests, not in a publicly cacheable View template.
+
+### Server-to-client requests use MRTR
+
+Multi Round-Trip Requests (MRTR) replaces standalone server-to-client `sampling/createMessage`, `elicitation/create`, and `roots/list` requests. A tool that needs more input returns `resultType: "input_required"`; the client retries the original call with `inputResponses` and any opaque `requestState`.
+
+The View method [`createSamplingMessage()`](/mcp-apps/app/requests/create-sampling-message) is part of the MCP Apps protocol and still sends `sampling/createMessage` from the View to the Host. It is not the removed core server-to-client request path.
+
+### Results and subscriptions changed
+
+- Every result includes `resultType`, normally `"complete"`.
+- `structuredContent` may be any JSON value when its `outputSchema` permits it.
+- `subscriptions/listen` replaces the HTTP GET notification stream and `resources/subscribe` methods.
+- Tasks moved from the core protocol to the `io.modelcontextprotocol/tasks` extension.
+- Core Roots, Sampling, and Logging are deprecated for new implementations. Their MCP Apps counterparts follow the Apps specification, not the deprecated core server APIs.
+
+## MCP Apps Capability Detection
+
+The UI extension identifier and settings stay the same:
+
+```json
+{
+  "extensions": {
+    "io.modelcontextprotocol/ui": {
+      "mimeTypes": ["text/html;profile=mcp-app"]
+    }
+  }
+}
+```
+
+In a legacy `2025-11-25` connection, the Host sends this object in the `initialize` request's client capabilities. In a modern `2026-07-28` connection, client capabilities travel in each request's `_meta`, and `server/discover` returns server capabilities.
+
+Tool-to-View linkage does not change. A UI tool still points to a `ui://` resource with `_meta.ui.resourceUri`, and the resource still uses `text/html;profile=mcp-app`.
+
+## Compatibility Matrix
+
+| MCP server | sunpeak 0.20.x inspector and test client | 2026-capable Host |
+| --- | --- | --- |
+| Legacy `2025-11-25` | Supported | Supported when the Host can fall back to the legacy era |
+| Dual-era | Supported through the legacy path | Supported through the 2026 path or legacy fallback |
+| Modern-only `2026-07-28` | Not supported | Supported |
+
+A modern-only server should return a clear error when a legacy client sends `initialize`, because a legacy client has no way to negotiate forward.
+
+## Prepare a sunpeak App for a Future Upgrade
+
+You do not need to change View code for the new core revision. On the server side:
+
+1. Do not use `extra.sessionId` as application state. Return explicit handles from tools and accept them in later tool arguments.
+2. Keep UI templates free of user data so they can use a clear cache policy.
+3. Classify every list and resource read as public or private before adding cache hints.
+4. Keep tool handlers independent of in-memory connection state so any request can run on any instance.
+5. Test a dual-era server with both 2025 and 2026 clients before dropping legacy support.
+6. Upgrade the MCP SDK and MCP Apps SDK only when their supported version ranges overlap.
+
+## Primary References
+
+<CardGroup cols={2}>
+  <Card
+    title="MCP 2026-07-28 Versioning"
+    icon="link"
+    href="https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning"
+  >
+    Per-request version negotiation, server discovery, and legacy compatibility.
+  </Card>
+  <Card
+    title="MCP 2026-07-28 Changes"
+    icon="link"
+    href="https://modelcontextprotocol.io/specification/2026-07-28/changelog"
+  >
+    Normative change list from `2025-11-25`.
+  </Card>
+  <Card
+    title="MCP Apps 2026-01-26 Specification"
+    icon="link"
+    href="https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx"
+  >
+    Stable UI resource, metadata, and View protocol.
+  </Card>
+  <Card title="Versions and Compatibility" icon="page" href="/mcp-apps/protocol-versions">
+    Compare core MCP, MCP Apps, SDK package, and app versions.
+  </Card>
+</CardGroup>

@@ -95,7 +95,7 @@ app.listen(3000);
 </ResponseField>
 
 <ResponseField name="stateless" type="boolean" default="false">
-  Enable stateless mode for serverless and horizontally-scaled deployments. When `true`, every request creates a fresh MCP server instance with no session tracking. The host is identified from HTTP headers (`User-Agent`, `x-anthropic-client`, `x-openai-session`) on every request. See [Serverless Deployment](/app-framework/guides/deployment#serverless--edge-deployment) and [Horizontal Scaling](/app-framework/guides/deployment#horizontal-scaling).
+  Enable stateless v1 transport mode for serverless and horizontally-scaled deployments. When `true`, every request creates a fresh MCP server instance with no session tracking. This does not enable the core MCP `2026-07-28` wire protocol. The host is identified from HTTP headers (`User-Agent`, `x-anthropic-client`, `x-openai-session`) on every request. See [Serverless Deployment](/app-framework/guides/deployment#serverless--edge-deployment), [Horizontal Scaling](/app-framework/guides/deployment#horizontal-scaling), and [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28).
 </ResponseField>
 
 ## `createHandler`

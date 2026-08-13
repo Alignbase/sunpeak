@@ -31,7 +31,7 @@ Tools are registered with the MCP protocol using `registerAppTool` from the MCP 
 | `--json-logs` | | Output structured JSON lines to stdout/stderr |
 | `--sse` | | Use SSE streaming instead of JSON responses (default: JSON) |
 | `--sse-keep-alive-ms <number>` | | SSE keep-alive interval in milliseconds when `--sse` is enabled (default: 15000, also respects `SUNPEAK_SSE_KEEP_ALIVE_MS`; `0` disables keep-alives) |
-| `--stateless` | | Stateless mode — no session tracking, fresh server per request. For serverless and horizontally-scaled deployments. See [Deployment Guide](/app-framework/guides/deployment#serverless--edge-deployment). |
+| `--stateless` | | Stateless v1 transport mode: no session tracking and a fresh server per request. This does not enable the MCP `2026-07-28` protocol. For serverless and horizontally-scaled deployments. See [Deployment Guide](/app-framework/guides/deployment#serverless--edge-deployment). |
 
 ## Usage
 

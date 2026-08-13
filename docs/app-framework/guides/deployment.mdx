@@ -196,6 +196,12 @@ Unlike `createMcpHandler`, the web handler does **not** do path matching — it 
 
 By default, both `createHandler` and `createMcpHandler` use **stateful mode**: they track MCP sessions in an in-memory map and route requests by the `mcp-session-id` header. This works for single-instance servers and multi-instance deployments with sticky sessions (see [Horizontal Scaling](#horizontal-scaling)).
 
+<Note>
+  Both modes use the handshake-based MCP `2025-11-25` protocol in sunpeak 0.20.x. Setting
+  `stateless: true` changes how the v1 server handles requests, but does not enable the core MCP
+  `2026-07-28` wire protocol. See [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28).
+</Note>
+
 **Stateless mode** (`stateless: true`) creates a fresh MCP server and transport for every request. No session map, no session ID validation. Use this when:
 
 - **Serverless** (Lambda, Workers, Vercel Edge) where each request may hit a different instance with no shared memory
@@ -329,7 +335,7 @@ location /health {
 
 ### Horizontal Scaling
 
-MCP uses session-based communication by default. Each `initialize` handshake creates a session, and all subsequent requests include an `mcp-session-id` header that must route back to the same server instance.
+sunpeak 0.20.x uses session-based communication by default. Each `initialize` handshake creates a session, and all subsequent requests include an `mcp-session-id` header that must route back to the same server instance.
 
 For multi-instance deployments behind a load balancer, you have two options:
 
