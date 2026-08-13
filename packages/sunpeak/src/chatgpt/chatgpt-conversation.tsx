@@ -393,6 +393,7 @@ export function Conversation({
                               >
                                 <div
                                   className="h-full w-full max-w-full"
+                                  data-sunpeak-preview-viewport={isFullscreen ? '' : undefined}
                                   style={{
                                     ...(isPip
                                       ? {
@@ -401,7 +402,7 @@ export function Conversation({
                                         }
                                       : isFullscreen
                                         ? {
-                                            overflow: 'auto',
+                                            overflow: 'hidden',
                                             backgroundColor: 'var(--color-background-primary)',
                                           }
                                         : { backgroundColor: 'transparent' }),
@@ -540,6 +541,7 @@ export function Conversation({
                           >
                             <div
                               className="h-full w-full max-w-full"
+                              data-sunpeak-preview-viewport={isFullscreen ? '' : undefined}
                               style={{
                                 ...(isPip
                                   ? {
@@ -548,7 +550,7 @@ export function Conversation({
                                     }
                                   : isFullscreen
                                     ? {
-                                        overflow: 'auto',
+                                        overflow: 'hidden',
                                         backgroundColor: 'var(--color-background-primary)',
                                       }
                                     : { backgroundColor: 'transparent' }),

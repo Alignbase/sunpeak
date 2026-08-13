@@ -398,6 +398,7 @@ export function ClaudeConversation({
                               >
                                 <div
                                   className="h-full w-full max-w-full"
+                                  data-sunpeak-preview-viewport={isFullscreen ? '' : undefined}
                                   style={{
                                     ...(isPip
                                       ? {
@@ -406,7 +407,7 @@ export function ClaudeConversation({
                                         }
                                       : isFullscreen
                                         ? {
-                                            overflow: 'auto',
+                                            overflow: 'hidden',
                                             backgroundColor: 'var(--color-background-primary)',
                                           }
                                         : { backgroundColor: 'transparent' }),
@@ -520,6 +521,7 @@ export function ClaudeConversation({
                     >
                       <div
                         className="h-full w-full max-w-full"
+                        data-sunpeak-preview-viewport={isFullscreen ? '' : undefined}
                         style={{
                           ...(isPip
                             ? {
@@ -528,7 +530,7 @@ export function ClaudeConversation({
                               }
                             : isFullscreen
                               ? {
-                                  overflow: 'auto',
+                                  overflow: 'hidden',
                                   backgroundColor: 'var(--color-background-primary)',
                                 }
                               : { backgroundColor: 'transparent' }),

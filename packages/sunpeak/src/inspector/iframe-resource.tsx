@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useEffect, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useMemo, useCallback, useLayoutEffect, useState } from 'react';
 import { McpAppHost, type McpAppHostOptions } from './mcp-app-host';
 import { MOCK_OPENAI_RUNTIME_SCRIPT } from './mock-openai-runtime';
 import { generateSandboxProxyHtml } from './sandbox-proxy';
@@ -399,6 +399,18 @@ interface IframeResourceProps {
   sandboxUrl?: string;
 }
 
+function computePreviewScale(
+  availableWidth: number,
+  availableHeight: number,
+  frameWidth: number,
+  frameHeight: number
+): number {
+  if (availableWidth <= 0 || availableHeight <= 0 || frameWidth <= 0 || frameHeight <= 0) {
+    return 1;
+  }
+  return Math.min(1, availableWidth / frameWidth, availableHeight / frameHeight);
+}
+
 /**
  * IframeResource renders MCP Apps in an iframe, communicating via the
  * MCP Apps protocol (PostMessageTransport + AppBridge).
@@ -431,6 +443,8 @@ export function IframeResource({
   sandboxUrl,
 }: IframeResourceProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const previewStageRef = useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState(1);
   const hostRef = useRef<McpAppHost | null>(null);
 
   // Determine which URL to validate (html mode has no URL — embedder supplies
@@ -778,11 +792,15 @@ export function IframeResource({
   // which causes the tool result to never reach the app.
   const dims = hostContext?.containerDimensions;
   const wrapperStyle: React.CSSProperties = {};
+  let frameWidth: number | undefined;
+  let frameHeight: number | undefined;
   if (dims) {
     const h = 'height' in dims ? dims.height : undefined;
     const mh = 'maxHeight' in dims ? dims.maxHeight : undefined;
     const w = 'width' in dims ? dims.width : undefined;
     const mw = 'maxWidth' in dims ? dims.maxWidth : undefined;
+    frameWidth = w;
+    frameHeight = h;
     if (h != null) {
       wrapperStyle.height = h;
       wrapperStyle.overflow = 'hidden';
@@ -794,6 +812,52 @@ export function IframeResource({
     if (w != null) wrapperStyle.width = w;
     if (mw != null) wrapperStyle.maxWidth = mw;
   }
+
+  const shouldScalePreview =
+    hostContext?.displayMode === 'fullscreen' && frameWidth != null && frameHeight != null;
+
+  useLayoutEffect(() => {
+    if (!shouldScalePreview || frameWidth == null || frameHeight == null) {
+      setPreviewScale(1);
+      return;
+    }
+
+    const stage = previewStageRef.current;
+    if (!stage) return;
+    const updateScale = () => {
+      const bounds = stage.getBoundingClientRect();
+      const nextScale = computePreviewScale(bounds.width, bounds.height, frameWidth, frameHeight);
+      setPreviewScale((current) => (Math.abs(current - nextScale) < 0.0001 ? current : nextScale));
+    };
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(stage);
+    window.addEventListener('resize', updateScale);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateScale);
+    };
+  }, [shouldScalePreview, frameWidth, frameHeight]);
+
+  const previewStageStyle: React.CSSProperties = shouldScalePreview
+    ? {
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+      }
+    : { display: 'contents' };
+  const previewFrameStyle: React.CSSProperties = shouldScalePreview
+    ? {
+        ...wrapperStyle,
+        flex: '0 0 auto',
+        transform: `scale(${previewScale})`,
+        transformOrigin: 'top center',
+      }
+    : wrapperStyle;
 
   // Validate URL for src mode
   if (src && !isValidUrl) {
@@ -808,17 +872,19 @@ export function IframeResource({
   // Both src and scriptSrc modes use the sandbox proxy. The proxy creates
   // the inner iframe after receiving content via onSandboxReady.
   return (
-    <div className={className} style={wrapperStyle}>
-      <iframe
-        ref={setIframeRef}
-        onLoad={handleLoad}
-        style={iframeStyle}
-        title="Resource Preview"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-        allow={allowAttribute}
-        src={sandboxSrc ?? undefined}
-        srcDoc={sandboxSrc ? undefined : proxyHtml}
-      />
+    <div ref={previewStageRef} data-sunpeak-preview-stage style={previewStageStyle}>
+      <div className={className} data-sunpeak-preview-frame style={previewFrameStyle}>
+        <iframe
+          ref={setIframeRef}
+          onLoad={handleLoad}
+          style={iframeStyle}
+          title="Resource Preview"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+          allow={allowAttribute}
+          src={sandboxSrc ?? undefined}
+          srcDoc={sandboxSrc ? undefined : proxyHtml}
+        />
+      </div>
     </div>
   );
 }
@@ -831,5 +897,6 @@ export const _testExports = {
   generateCSP,
   generateScriptHtml,
   buildIframeAllow,
+  computePreviewScale,
   ALLOWED_SCRIPT_ORIGINS,
 };

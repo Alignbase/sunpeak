@@ -2,6 +2,8 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { deriveContainerDimensions, useInspectorState } from './use-inspector-state';
 import type { Simulation } from '../types/simulation';
+import '../chatgpt/chatgpt-host';
+import '../claude/claude-host';
 
 function createSim(name: string, hasResource: boolean): Simulation {
   return {
@@ -80,7 +82,7 @@ describe('useInspectorState', () => {
     expect(result.current.touch).toBe(true);
     expect(result.current.containerWidth).toBe(430);
     expect(result.current.containerHeight).toBe(932);
-    expect(result.current.safeAreaInsets).toEqual({ top: 59, bottom: 34, left: 0, right: 0 });
+    expect(result.current.safeAreaInsets).toEqual({ top: 59, bottom: 150, left: 0, right: 0 });
     expect(result.current.hostContext.containerDimensions).toEqual({ height: 932, width: 430 });
   });
 
@@ -97,7 +99,73 @@ describe('useInspectorState', () => {
     expect(result.current.platform).toBe('mobile');
     expect(result.current.containerWidth).toBe(393);
     expect(result.current.containerHeight).toBe(852);
-    expect(result.current.safeAreaInsets).toEqual({ top: 59, bottom: 34, left: 0, right: 0 });
+    expect(result.current.safeAreaInsets).toEqual({ top: 59, bottom: 150, left: 0, right: 0 });
+  });
+
+  it.each([
+    ['chatgpt', { top: 59, right: 0, bottom: 150, left: 0 }],
+    ['claude', { top: 59, right: 16, bottom: 138, left: 16 }],
+  ] as const)('merges iPhone 15 and %s fullscreen safe areas per edge', (host, expected) => {
+    window.history.replaceState(
+      {},
+      '',
+      `/?devicePreset=iphone-15&host=${host}&displayMode=fullscreen`
+    );
+
+    const { result } = renderHook(() => useInspectorState({ simulations: {} }));
+
+    expect(result.current.deviceSafeArea).toEqual({
+      top: 59,
+      right: 0,
+      bottom: 34,
+      left: 0,
+    });
+    expect(result.current.effectiveSafeArea).toEqual(expected);
+    expect(result.current.hostContext.safeAreaInsets).toEqual(expected);
+  });
+
+  it('keeps URL safe-area values as an explicit override over device and host insets', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/?devicePreset=iphone-15&host=chatgpt&displayMode=fullscreen&safeAreaTop=1&safeAreaRight=2&safeAreaBottom=3&safeAreaLeft=4'
+    );
+
+    const { result } = renderHook(() => useInspectorState({ simulations: {} }));
+
+    expect(result.current.safeAreaOverride).toEqual({ top: 1, right: 2, bottom: 3, left: 4 });
+    expect(result.current.effectiveSafeArea).toEqual({ top: 1, right: 2, bottom: 3, left: 4 });
+    expect(result.current.hostContext.safeAreaInsets).toEqual({
+      top: 1,
+      right: 2,
+      bottom: 3,
+      left: 4,
+    });
+  });
+
+  it('keeps a stored manual safe-area override above a device preset selected by URL', () => {
+    localStorage.setItem(
+      PREFS_KEY,
+      JSON.stringify({
+        devicePreset: 'custom',
+        safeAreaOverride: { top: 1, right: 2, bottom: 3, left: 4 },
+      })
+    );
+    window.history.replaceState(
+      {},
+      '',
+      '/?devicePreset=iphone-15&host=chatgpt&displayMode=fullscreen'
+    );
+
+    const { result } = renderHook(() => useInspectorState({ simulations: {} }));
+
+    expect(result.current.safeAreaOverride).toEqual({ top: 1, right: 2, bottom: 3, left: 4 });
+    expect(result.current.effectiveSafeArea).toEqual({
+      top: 1,
+      right: 2,
+      bottom: 3,
+      left: 4,
+    });
   });
 
   it('marks the device preset custom when dimensions are edited manually', () => {
@@ -111,7 +179,30 @@ describe('useInspectorState', () => {
 
     expect(result.current.devicePreset).toBe('custom');
     expect(result.current.containerWidth).toBe(390);
-    expect(result.current.safeAreaInsets).toEqual({ top: 59, bottom: 34, left: 0, right: 0 });
+    expect(result.current.safeAreaInsets).toEqual({ top: 59, bottom: 150, left: 0, right: 0 });
+  });
+
+  it('keeps device and host safe areas reactive after an unrelated preset field is edited', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/?devicePreset=iphone-15&host=chatgpt&displayMode=fullscreen'
+    );
+
+    const { result } = renderHook(() => useInspectorState({ simulations: {} }));
+
+    act(() => result.current.setContainerWidth(390));
+    expect(result.current.devicePreset).toBe('custom');
+    expect(result.current.safeAreaOverride).toBeUndefined();
+    expect(result.current.deviceSafeArea).toEqual({ top: 59, bottom: 34, left: 0, right: 0 });
+
+    act(() => result.current.setActiveHost('claude'));
+    expect(result.current.effectiveSafeArea).toEqual({
+      top: 59,
+      right: 16,
+      bottom: 138,
+      left: 16,
+    });
   });
 
   it('preserves current preview values when selecting custom after a device preset', () => {
@@ -129,7 +220,7 @@ describe('useInspectorState', () => {
     expect(result.current.displayMode).toBe('fullscreen');
     expect(result.current.containerWidth).toBe(393);
     expect(result.current.containerHeight).toBe(852);
-    expect(result.current.safeAreaInsets).toEqual({ top: 59, bottom: 34, left: 0, right: 0 });
+    expect(result.current.safeAreaInsets).toEqual({ top: 59, bottom: 150, left: 0, right: 0 });
   });
 
   it('stores structured model context for future model turns without changing resource state', () => {

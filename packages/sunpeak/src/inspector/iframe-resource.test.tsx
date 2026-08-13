@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IframeResource, _testExports } from './iframe-resource';
 
@@ -9,6 +9,7 @@ const {
   generateCSP,
   generateScriptHtml,
   buildIframeAllow,
+  computePreviewScale,
   ALLOWED_SCRIPT_ORIGINS,
 } = _testExports;
 
@@ -29,6 +30,72 @@ function withWindowLocation(url: string, callback: () => void) {
 }
 
 describe('IframeResource', () => {
+  it('applies and updates the fullscreen frame transform from stage geometry', () => {
+    let resizeCallback: ResizeObserverCallback | undefined;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resizeCallback = callback;
+        }
+        observe = observe;
+        disconnect = disconnect;
+      }
+    );
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+    rectSpy.mockReturnValue({
+      width: 393,
+      height: 668,
+      top: 0,
+      right: 393,
+      bottom: 668,
+      left: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    const { unmount } = render(
+      <IframeResource
+        scriptSrc="/dist/carousel/carousel.js"
+        hostContext={{
+          theme: 'dark',
+          displayMode: 'fullscreen',
+          containerDimensions: { width: 393, height: 852 },
+        }}
+      />
+    );
+
+    const iframe = screen.getByTitle('Resource Preview') as HTMLIFrameElement;
+    const frame = iframe.closest('[data-sunpeak-preview-frame]') as HTMLElement;
+    const stage = iframe.closest('[data-sunpeak-preview-stage]') as HTMLElement;
+    expect(observe).toHaveBeenCalledWith(stage);
+    expect(frame.style.transform).toBe(`scale(${668 / 852})`);
+    expect(iframe.style.width).toBe('100%');
+    expect(iframe.style.height).toBe('100%');
+
+    rectSpy.mockReturnValue({
+      width: 393,
+      height: 900,
+      top: 0,
+      right: 393,
+      bottom: 900,
+      left: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    act(() => resizeCallback?.([], {} as ResizeObserver));
+    expect(frame.style.transform).toBe('scale(1)');
+
+    unmount();
+    expect(disconnect).toHaveBeenCalled();
+    rectSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
   it('renders an iframe with srcDoc', () => {
     render(<IframeResource scriptSrc="/dist/carousel/carousel.js" />);
 
@@ -138,6 +205,53 @@ describe('IframeResource', () => {
     expect(iframe.parentElement?.style.width).toBe('430px');
     expect(iframe.parentElement?.style.height).toBe('932px');
     expect(iframe.style.height).toBe('100%');
+  });
+
+  it.each([
+    {
+      name: 'iPhone 15 in a 1280x720 inspector stage',
+      stage: { width: 393, height: 668 },
+      frame: { width: 393, height: 852 },
+      expected: 668 / 852,
+    },
+    {
+      name: 'iPhone SE when the full device frame fits',
+      stage: { width: 375, height: 668 },
+      frame: { width: 375, height: 667 },
+      expected: 1,
+    },
+    {
+      name: 'iPad constrained by inspector width and height',
+      stage: { width: 760, height: 668 },
+      frame: { width: 820, height: 1180 },
+      expected: 668 / 1180,
+    },
+  ])('scales $name without changing its internal viewport', ({ stage, frame, expected }) => {
+    expect(computePreviewScale(stage.width, stage.height, frame.width, frame.height)).toBeCloseTo(
+      expected,
+      6
+    );
+  });
+
+  it('keeps fullscreen iframe dimensions inside a separate scale-to-fit stage', () => {
+    render(
+      <IframeResource
+        scriptSrc="/dist/carousel/carousel.js"
+        hostContext={{
+          theme: 'dark',
+          displayMode: 'fullscreen',
+          containerDimensions: { width: 393, height: 852 },
+        }}
+      />
+    );
+
+    const iframe = screen.getByTitle('Resource Preview') as HTMLIFrameElement;
+    const frame = iframe.closest('[data-sunpeak-preview-frame]') as HTMLElement | null;
+    const stage = iframe.closest('[data-sunpeak-preview-stage]') as HTMLElement | null;
+    expect(frame?.style.width).toBe('393px');
+    expect(frame?.style.height).toBe('852px');
+    expect(stage?.style.width).toBe('100%');
+    expect(stage?.style.height).toBe('100%');
   });
 
   it('generates app HTML with theme via generateScriptHtml (used by sandbox delivery)', () => {

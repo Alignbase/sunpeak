@@ -19,6 +19,7 @@ import {
 } from './device-presets';
 
 type Platform = NonNullable<McpUiHostContext['platform']>;
+type SafeAreaInsets = Required<NonNullable<McpUiHostContext['safeAreaInsets']>>;
 
 interface ModelAppContext {
   content?: unknown[];
@@ -29,6 +30,28 @@ const DEFAULT_THEME: McpUiTheme = 'dark';
 const DEFAULT_DISPLAY_MODE: McpUiDisplayMode = 'inline';
 const DEFAULT_PLATFORM: Platform = 'desktop';
 const DEFAULT_SIDEBAR_WIDTH = 260;
+function normalizeSafeArea(insets?: Partial<SafeAreaInsets>): SafeAreaInsets {
+  return {
+    top: insets?.top ?? 0,
+    right: insets?.right ?? 0,
+    bottom: insets?.bottom ?? 0,
+    left: insets?.left ?? 0,
+  };
+}
+
+function deriveEffectiveSafeArea(
+  deviceSafeArea: SafeAreaInsets,
+  hostSafeArea: SafeAreaInsets,
+  safeAreaOverride?: SafeAreaInsets
+): SafeAreaInsets {
+  if (safeAreaOverride) return safeAreaOverride;
+  return {
+    top: Math.max(deviceSafeArea.top, hostSafeArea.top),
+    right: Math.max(deviceSafeArea.right, hostSafeArea.right),
+    bottom: Math.max(deviceSafeArea.bottom, hostSafeArea.bottom),
+    left: Math.max(deviceSafeArea.left, hostSafeArea.left),
+  };
+}
 
 export interface UseInspectorStateOptions {
   simulations: Record<string, Simulation>;
@@ -78,10 +101,14 @@ export interface InspectorState {
   setHover: (hover: boolean) => void;
   touch: boolean;
   setTouch: (touch: boolean) => void;
-  safeAreaInsets: { top: number; bottom: number; left: number; right: number };
-  setSafeAreaInsets: React.Dispatch<
-    React.SetStateAction<{ top: number; bottom: number; left: number; right: number }>
-  >;
+  /** Explicit URL/manual override. When absent, device and host insets are merged per edge. */
+  safeAreaOverride: SafeAreaInsets | undefined;
+  deviceSafeArea: SafeAreaInsets;
+  hostSafeArea: SafeAreaInsets;
+  effectiveSafeArea: SafeAreaInsets;
+  /** Backward-compatible alias for effectiveSafeArea. */
+  safeAreaInsets: SafeAreaInsets;
+  setSafeAreaInsets: React.Dispatch<React.SetStateAction<SafeAreaInsets>>;
   timeZone: string;
   setTimeZone: (tz: string) => void;
   // ── Computed host context ──
@@ -306,6 +333,8 @@ export interface StoredPrefs {
   containerMaxHeight?: number;
   containerMaxWidth?: number;
   safeAreaInsets?: { top: number; bottom: number; left: number; right: number };
+  deviceSafeArea?: { top: number; bottom: number; left: number; right: number };
+  safeAreaOverride?: { top: number; bottom: number; left: number; right: number };
   activeHost?: HostId;
   platform?: Platform;
   hover?: boolean;
@@ -379,6 +408,38 @@ function sanitizeStoredPrefs(raw: unknown): StoredPrefs {
       typeof insets.right === 'number'
     ) {
       prefs.safeAreaInsets = {
+        top: insets.top,
+        bottom: insets.bottom,
+        left: insets.left,
+        right: insets.right,
+      };
+    }
+  }
+  if (obj.deviceSafeArea && typeof obj.deviceSafeArea === 'object') {
+    const insets = obj.deviceSafeArea as Record<string, unknown>;
+    if (
+      typeof insets.top === 'number' &&
+      typeof insets.bottom === 'number' &&
+      typeof insets.left === 'number' &&
+      typeof insets.right === 'number'
+    ) {
+      prefs.deviceSafeArea = {
+        top: insets.top,
+        bottom: insets.bottom,
+        left: insets.left,
+        right: insets.right,
+      };
+    }
+  }
+  if (obj.safeAreaOverride && typeof obj.safeAreaOverride === 'object') {
+    const insets = obj.safeAreaOverride as Record<string, unknown>;
+    if (
+      typeof insets.top === 'number' &&
+      typeof insets.bottom === 'number' &&
+      typeof insets.left === 'number' &&
+      typeof insets.right === 'number'
+    ) {
+      prefs.safeAreaOverride = {
         top: insets.top,
         bottom: insets.bottom,
         left: insets.left,
@@ -598,25 +659,38 @@ export function useInspectorState({
       storedPrefs.touch ??
       false
   );
-  const [safeAreaInsets, _setSafeAreaInsets] = useState(
-    urlParams.safeAreaInsets ??
-      initialDevicePresetConfig?.safeAreaInsets ??
-      storedPrefs.safeAreaInsets ?? { top: 0, bottom: 0, left: 0, right: 0 }
+  // URL values are an explicit, immutable initial override. Manual values use
+  // separate state so device presets and host chrome remain independently
+  // observable and can be merged when no override exists.
+  const urlSafeAreaOverride = urlParams.safeAreaInsets;
+  const [manualSafeAreaOverride, setManualSafeAreaOverride] = useState<SafeAreaInsets | undefined>(
+    () =>
+      storedPrefs.safeAreaOverride ??
+      (initialDevicePreset === CUSTOM_DEVICE_PRESET ? storedPrefs.safeAreaInsets : undefined)
+  );
+  const [deviceSafeArea, setDeviceSafeArea] = useState<SafeAreaInsets>(() =>
+    normalizeSafeArea(initialDevicePresetConfig?.safeAreaInsets ?? storedPrefs.deviceSafeArea)
   );
   const [timeZone, setTimeZone] = useState(
     () => storedPrefs.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   );
-  const skipNextHostSafeAreaRef = useRef(false);
 
-  const markCustomDevicePreset = useCallback(
-    (skipHostSafeAreaUpdate = true) => {
-      if (devicePreset !== CUSTOM_DEVICE_PRESET && skipHostSafeAreaUpdate) {
-        skipNextHostSafeAreaRef.current = true;
-      }
-      setDevicePreset(CUSTOM_DEVICE_PRESET);
-    },
-    [devicePreset]
+  const hostSafeArea = useMemo(
+    () => normalizeSafeArea(getHostShell(activeHost)?.safeAreaByDisplayMode?.[displayMode]),
+    [activeHost, displayMode]
   );
+  // Precedence is explicit URL override -> manual override -> per-edge max of
+  // the selected device and host display-mode insets.
+  const safeAreaOverride = urlSafeAreaOverride ?? manualSafeAreaOverride;
+  const effectiveSafeArea = useMemo(
+    () => deriveEffectiveSafeArea(deviceSafeArea, hostSafeArea, safeAreaOverride),
+    [deviceSafeArea, hostSafeArea, safeAreaOverride]
+  );
+  const safeAreaInsets = effectiveSafeArea;
+
+  const markCustomDevicePreset = useCallback(() => {
+    setDevicePreset(CUSTOM_DEVICE_PRESET);
+  }, []);
 
   const setScreenWidth = useCallback(
     (width: ScreenWidth) => {
@@ -675,30 +749,22 @@ export function useInspectorState({
     [markCustomDevicePreset]
   );
   const setSafeAreaInsets = useCallback(
-    (
-      value:
-        | { top: number; bottom: number; left: number; right: number }
-        | ((prev: { top: number; bottom: number; left: number; right: number }) => {
-            top: number;
-            bottom: number;
-            left: number;
-            right: number;
-          })
-    ) => {
-      markCustomDevicePreset();
-      _setSafeAreaInsets(value);
+    (value: React.SetStateAction<SafeAreaInsets>) => {
+      setDevicePreset(CUSTOM_DEVICE_PRESET);
+      setManualSafeAreaOverride(typeof value === 'function' ? value(effectiveSafeArea) : value);
     },
-    [markCustomDevicePreset]
+    [effectiveSafeArea]
   );
 
   const applyDevicePreset = useCallback((presetId: DevicePresetSelection) => {
     const preset = getDevicePreset(presetId);
     if (!preset) {
-      skipNextHostSafeAreaRef.current = true;
       setDevicePreset(CUSTOM_DEVICE_PRESET);
       return;
     }
 
+    setManualSafeAreaOverride(undefined);
+    setDeviceSafeArea(normalizeSafeArea(preset.safeAreaInsets));
     setDevicePreset(presetId);
     _setDisplayMode(preset.displayMode);
     _setScreenWidth(preset.screenWidth);
@@ -709,7 +775,6 @@ export function useInspectorState({
     _setPlatform(preset.platform);
     _setHover(preset.hover);
     _setTouch(preset.touch);
-    _setSafeAreaInsets({ ...preset.safeAreaInsets });
   }, []);
 
   // Skip persisting on the first render — only write when the user actually changes something.
@@ -731,6 +796,8 @@ export function useInspectorState({
       containerMaxHeight,
       containerMaxWidth,
       safeAreaInsets,
+      deviceSafeArea,
+      safeAreaOverride: manualSafeAreaOverride,
       activeHost,
       platform,
       hover,
@@ -751,6 +818,8 @@ export function useInspectorState({
     containerMaxHeight,
     containerMaxWidth,
     safeAreaInsets,
+    deviceSafeArea,
+    manualSafeAreaOverride,
     activeHost,
     platform,
     hover,
@@ -771,7 +840,7 @@ export function useInspectorState({
   // Display mode setter that respects mobile width constraints
   const setDisplayMode = useCallback(
     (mode: McpUiDisplayMode) => {
-      markCustomDevicePreset(false);
+      markCustomDevicePreset();
       if (isMobileWidth(screenWidth) && mode === 'pip') {
         _setDisplayMode('fullscreen');
       } else {
@@ -901,26 +970,6 @@ export function useInspectorState({
     }
   }, [screenWidth, displayMode]);
 
-  // Auto-apply safe area insets when display mode or host changes
-  useEffect(() => {
-    if (skipNextHostSafeAreaRef.current) {
-      skipNextHostSafeAreaRef.current = false;
-      return;
-    }
-    if (devicePreset !== CUSTOM_DEVICE_PRESET) return;
-
-    const shell = getHostShell(activeHost);
-    const modeInsets = shell?.safeAreaByDisplayMode?.[displayMode];
-    if (modeInsets) {
-      _setSafeAreaInsets({
-        top: modeInsets.top ?? 0,
-        bottom: modeInsets.bottom ?? 0,
-        left: modeInsets.left ?? 0,
-        right: modeInsets.right ?? 0,
-      });
-    }
-  }, [displayMode, activeHost, devicePreset]);
-
   // ── Host callbacks ──
 
   const handleDisplayModeChange = (mode: McpUiDisplayMode) => {
@@ -1033,6 +1082,10 @@ export function useInspectorState({
     setHover,
     touch,
     setTouch,
+    safeAreaOverride,
+    deviceSafeArea,
+    hostSafeArea,
+    effectiveSafeArea,
     safeAreaInsets,
     setSafeAreaInsets,
     timeZone,
