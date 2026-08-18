@@ -1,14 +1,14 @@
 ---
-title: "Server Entry"
-description: "Optional auth and server configuration."
-keywords: ["MCP Apps", "ChatGPT Apps", "MCP server", "authentication", "server config"]
+title: 'Server Entry'
+description: 'Optional auth and server configuration.'
+keywords: ['MCP Apps', 'ChatGPT Apps', 'MCP server', 'authentication', 'server config']
 ---
 
 <Badge color="yellow">sunpeak API</Badge>
 
 ## Overview
 
-The optional `src/server.ts` file configures authentication and server metadata. When present, the framework calls `auth()` on every MCP request and populates `extra.authInfo` in tool handlers.
+The optional `src/server.ts` file configures authentication, OAuth protected-resource metadata, and server metadata. When present, the framework calls `auth()` on every MCP request and populates `extra.authInfo` in tool handlers.
 
 Under the hood, the returned `AuthInfo` is set as `req.auth` on the HTTP request — the same mechanism the MCP SDK uses. This gives you the same flexibility as using the SDK directly.
 
@@ -39,7 +39,7 @@ export const server = { name: 'My App', version: '1.0.0' };
 
 ### `auth` (function, optional)
 
-Called on every MCP request. Return `AuthInfo` to authenticate, or `null` to reject the request with 401.
+Called on every MCP request. Return `AuthInfo` to authenticate, `null` to reject the request with 401, or `AuthorizationFailure` to return a specific OAuth error and scope challenge. The second argument includes the parsed request body for request-specific scope checks.
 
 ```ts
 export async function auth(req: IncomingMessage): Promise<AuthInfo | null> {
@@ -55,20 +55,36 @@ export async function auth(req: IncomingMessage): Promise<AuthInfo | null> {
   The incoming HTTP request from Node's `http` module. Access headers, cookies, query params, etc.
 </ResponseField>
 
-**Returns** `AuthInfo | null` (sync or async):
+**Returns** `AuthInfo | AuthorizationFailure | null` (sync or async):
 
 ```typescript
 interface AuthInfo {
   token: string;
   clientId: string;
   scopes: string[];
-  expiresAt?: number;           // Unix timestamp
-  resource?: URL;               // RFC 8707 resource identifier
+  expiresAt?: number; // Unix timestamp
+  resource?: URL; // RFC 8707 resource identifier
   extra?: Record<string, unknown>; // Custom data
 }
 ```
 
-Return `null` to reject the request — Sunpeak responds with `401 Unauthorized` and a `WWW-Authenticate: Bearer` header.
+Return `null` to reject the request. sunpeak responds with `401 Unauthorized` and a `WWW-Authenticate: Bearer` header.
+
+### `oauth` (object, optional)
+
+Publishes OAuth 2.0 Protected Resource Metadata and adds its URL to bearer challenges. `sunpeak start` loads this export automatically.
+
+```ts
+import type { OAuthProtectedResourceConfig } from 'sunpeak/mcp';
+
+export const oauth: OAuthProtectedResourceConfig = {
+  resource: 'https://mcp.example.com/mcp',
+  authorizationServers: ['https://auth.example.com'],
+  scopesSupported: ['profile:read'],
+};
+```
+
+See [Authorization](/app-framework/guides/authorization) for scope upgrades, token checks, and custom handler setup.
 
 ### `server` (object, optional)
 
@@ -99,19 +115,21 @@ export const server = { name: 'My App', version: '1.0.0' };
 </ResponseField>
 
 <ResponseField name="icons" type="Icon[]">
-  64x64 PNG icons (data URIs preferred). Light and dark variants supported via the `theme` field on each icon.
+  64x64 PNG icons (data URIs preferred). Light and dark variants supported via the `theme` field on
+  each icon.
 </ResponseField>
 
 <ResponseField name="instructions" type="string">
   Server-wide instructions sent in the MCP `initialize` response. Hosts (ChatGPT, Claude) may surface this to the model, typically by injecting it into the system prompt. Use it for guidance that spans multiple tools or describes the server as a whole — e.g., "Always call `get_user` before `update_user`" or "This server is read-only between 5pm and 9am UTC". Per-tool guidance still belongs in each tool's `description`.
 
-  ```ts
-  export const server: ServerConfig = {
-    name: 'My App',
-    version: '1.0.0',
-    instructions: 'Call list_orders before fulfill_order. Refunds require a manager scope.',
-  };
-  ```
+```ts
+export const server: ServerConfig = {
+  name: 'My App',
+  version: '1.0.0',
+  instructions: 'Call list_orders before fulfill_order. Refunds require a manager scope.',
+};
+```
+
 </ResponseField>
 
 ## Using Auth in Tool Handlers

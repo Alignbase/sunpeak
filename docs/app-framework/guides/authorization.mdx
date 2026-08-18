@@ -1,181 +1,174 @@
 ---
-title: "Authorization"
-description: "Add OAuth authorization to your sunpeak MCP App — per-server auth, per-tool auth, and UI-initiated step-up flows."
-keywords: ["MCP Apps", "ChatGPT Apps", "Claude Apps", "authorization", "OAuth", "authentication", "auth", "JWT"]
+title: 'Authorization'
+description: 'Add standards-based OAuth authorization to a sunpeak MCP server.'
+keywords: ['MCP Apps', 'authorization', 'OAuth', 'authentication', 'JWT']
 ---
 
-## Overview
+sunpeak implements the resource-server side of MCP OAuth. It can publish OAuth 2.0 Protected Resource Metadata, return RFC 6750 bearer challenges, and pass verified token data to tool handlers. Your authorization server still owns login, consent, client registration, token issuance, and refresh tokens.
 
-MCP Apps can protect tools behind OAuth-based authorization, as defined in the [MCP specification](https://modelcontextprotocol.io/specification/latest/basic/authorization). There are two approaches:
+## Configure OAuth metadata
 
-- **Per-server authorization** — every MCP request requires a valid token. Simple when all tools are sensitive.
-- **Per-tool authorization** — only specific tools require authorization. Public tools work without a token, and the OAuth flow triggers only when the user calls a protected tool.
-
-sunpeak supports both approaches through the [`src/server.ts`](/app-framework/tools/server-entry) auth export.
-
-## Server auth with `src/server.ts`
-
-Export an `auth()` function from `src/server.ts`. sunpeak calls it on every MCP request and populates `extra.authInfo` in tool handlers.
+Export `oauth` next to `auth` in `src/server.ts`:
 
 ```ts
-// src/server.ts
-import type { IncomingMessage } from 'node:http';
-import type { AuthInfo } from 'sunpeak/mcp';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import type { AuthInfo, AuthFunction, OAuthProtectedResourceConfig } from 'sunpeak/mcp';
 
-const JWKS = createRemoteJWKSet(new URL('https://auth.example.com/.well-known/jwks.json'));
-
-export async function auth(req: IncomingMessage): Promise<AuthInfo | null> {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return null; // → 401 Unauthorized
-
-  try {
-    const { payload } = await jwtVerify(token, JWKS, {
-      issuer: 'https://auth.example.com',
-    });
-    return { token, clientId: payload.sub as string, scopes: [] };
-  } catch {
-    return null; // Invalid token → 401
-  }
-}
-```
-
-Return `AuthInfo` to authenticate, or `null` to reject with 401.
-
-## Per-tool authorization
-
-Check `extra.authInfo` in tool handlers to scope data to the authenticated user. For per-tool auth, return a valid `AuthInfo` even without a token (for public tools), but include the token data when present.
-
-```ts
-// src/tools/get-account.ts
-import { z } from 'zod';
-import type { AppToolConfig, ToolHandlerExtra } from 'sunpeak/mcp';
-
-export const tool: AppToolConfig = {
-  resource: 'account',
-  title: 'Get Account',
-  description: 'Get account details (requires login)',
+export const oauth: OAuthProtectedResourceConfig = {
+  resource: 'https://mcp.example.com/mcp',
+  authorizationServers: ['https://auth.example.com'],
+  scopesSupported: ['profile:read', 'files:write'],
+  resourceName: 'Example MCP server',
 };
 
-export const schema = {
-  accountId: z.string(),
-};
+export const auth: AuthFunction = async (req) => {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  if (!token) return null;
 
-export default async function (args: { accountId: string }, extra: ToolHandlerExtra) {
-  // Defence-in-depth: always check auth even with HTTP-level enforcement
-  if (!extra.authInfo) {
+  const claims = await verifyAccessToken(token);
+  if (!claims) {
     return {
-      isError: true,
-      content: [{ type: 'text', text: 'Authorization required to access account data.' }],
+      authorized: false,
+      error: 'invalid_token',
+      errorDescription: 'The access token is invalid or expired',
     };
   }
 
-  const data = await getAccount(extra.authInfo.token, args.accountId);
-  return { structuredContent: data };
-}
+  return {
+    token,
+    clientId: claims.clientId,
+    scopes: claims.scopes,
+  } satisfies AuthInfo;
+};
 ```
 
-## UI-initiated auth escalation
+`sunpeak start` then serves both protected-resource discovery forms:
 
-A powerful pattern: load the app with public data (no auth required), then trigger the OAuth flow only when the user performs a protected action.
+```text
+/.well-known/oauth-protected-resource/mcp
+/.well-known/oauth-protected-resource
+```
 
-1. A public tool loads the UI without authorization
-2. The user clicks a button that calls a protected tool via [`useCallServerTool`](/app-framework/hooks/use-call-server-tool)
-3. The host receives HTTP 401, automatically runs the OAuth flow
-4. After the user completes OAuth, the host retries the tool call with the token
-5. The protected data appears in the UI
+Unauthenticated MCP requests receive a challenge like this:
 
-```tsx
-import { useCallServerTool } from 'sunpeak';
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp", scope="profile:read files:write"
+```
 
-function BranchItem({ branch }: { branch: Branch }) {
-  const callTool = useCallServerTool();
-  const [adminData, setAdminData] = useState(null);
+Set `resource` to the exact public MCP resource identifier. Token verification must enforce that resource or audience so the server does not accept tokens minted for another service.
 
-  async function handleManage() {
-    // This may trigger OAuth if the user hasn't authenticated yet.
-    // The host handles the flow transparently.
-    const result = await callTool({
-      name: 'manage-branch-admin',
-      arguments: { branch_id: branch.id },
-    });
-    setAdminData(result.structuredContent);
+OAuth resource and authorization server URLs must use HTTPS. Plain HTTP is accepted only for loopback development URLs.
+
+## Request more scopes
+
+The auth function receives the parsed MCP request as its second argument. Return `authorized: false` with `insufficient_scope` when a request needs scopes the current token does not have. sunpeak returns a 403 challenge that clients can use for an OAuth scope upgrade.
+
+```ts
+import type { AuthFunction } from 'sunpeak/mcp';
+
+export const auth: AuthFunction = async (req, context) => {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  if (!token) return null;
+
+  const claims = await verifyAccessToken(token);
+  if (!claims) {
+    return { authorized: false, error: 'invalid_token' };
   }
 
-  return (
-    <div>
-      <span className="text-[var(--color-text-primary)]">{branch.name}</span>
-      <button onClick={handleManage}>Manage</button>
-      {adminData && <AdminPanel data={adminData} />}
-    </div>
-  );
-}
+  const body = context.body as { method?: string; params?: { name?: string } } | undefined;
+  const isWrite = body?.method === 'tools/call' && body.params?.name === 'save-file';
+
+  if (isWrite && !claims.scopes.includes('files:write')) {
+    return {
+      authorized: false,
+      error: 'insufficient_scope',
+      scopes: ['profile:read', 'files:write'],
+    };
+  }
+
+  return { token, clientId: claims.clientId, scopes: claims.scopes };
+};
 ```
 
-This keeps the initial experience fast (no login wall) while securing sensitive operations.
+Include every scope required for the current operation in `scopes`. The client combines that challenge with scopes requested earlier before it starts the new authorization flow, so the server does not need to repeat scopes required only by other operations.
 
-## OAuth discovery endpoints
+## Use the composable handlers
 
-The [MCP specification](https://modelcontextprotocol.io/specification/latest/basic/authorization#authorization-server-discovery) requires servers to implement OAuth discovery so hosts know how to obtain authorization.
+The same configuration works with Node and Web Standard handlers:
 
-**Protected Resource Metadata** (`/.well-known/oauth-protected-resource`) — describes the resource server and identifies which authorization server(s) can issue tokens. The MCP SDK's `mcpAuthRouter` handles this automatically.
+```ts
+import { createMcpHandler } from 'sunpeak/mcp';
 
-**Authorization Server Metadata** (`/.well-known/oauth-authorization-server`) — advertises authorization and token endpoints, supported scopes, and client registration support.
+export const handler = createMcpHandler({
+  tools,
+  resources,
+  serverUrl: 'https://mcp.example.com/mcp',
+  oauth,
+  auth,
+});
+```
 
-For custom server setups (using [`createMcpHandler`](/app-framework/tools/production-server)), you may need to implement these endpoints yourself. See the [MCP authorization spec](https://modelcontextprotocol.io/specification/latest/basic/authorization) for full requirements.
+```ts
+import { createHandler } from 'sunpeak/mcp';
+
+export const handler = createHandler({
+  tools,
+  resources,
+  serverUrl: 'https://mcp.example.com/mcp',
+  oauth,
+  auth,
+  stateless: true,
+});
+```
+
+Mount a Web Standard handler at the MCP endpoint and route both `/.well-known/oauth-protected-resource` paths to it. The Node handler recognizes those paths itself and falls through for unrelated routes.
+
+For a custom router, `createOAuthProtectedResourceMetadata`, `getOAuthProtectedResourceMetadataUrl`, and `createOAuthChallenge` are exported from `sunpeak/mcp`.
+
+## Client behavior in the inspector
+
+The inspector follows the MCP OAuth discovery flow and supports these registration paths in order:
+
+1. A pre-registered client ID, with an optional secret
+2. A URL-based client ID backed by an HTTPS Client ID Metadata Document
+3. Dynamic Client Registration when the authorization server advertises it
+
+Authorization Code flows use PKCE and state validation. Callback responses also validate the authorization server issuer when RFC 9207 is used. Cached tokens, registration data, PKCE verifiers, and discovery state are invalidated through the MCP SDK lifecycle when they become stale.
+
+Before opening the authorization page, the inspector requires the authorization server metadata issuer to exactly match the advertised issuer and requires `code_challenge_methods_supported` to include `S256`. When protected-resource metadata advertises more than one authorization server, the inspector asks which issuer to use and keeps client credentials, tokens, and PKCE state separate for each issuer.
+
+For a pre-registered confidential client, choose automatic client authentication or explicitly select `client_secret_basic`, `client_secret_post`, or `none`. The selected method must be advertised by the authorization server when it publishes `token_endpoint_auth_methods_supported`.
+
+Runtime `insufficient_scope` challenges start a fresh authorization flow with the union of previously requested scopes and the scopes required for the current operation. The inspector does not use a refresh-token request as a substitute for user authorization of new scopes.
+
+The inspector advertises the `refresh_token` grant. It adds `offline_access` to the authorization request only when the selected authorization server lists that scope in `scopes_supported`.
+
+Use **Clear local authorization** to discard the inspector's cached tokens, client registration, PKCE verifier, and discovery state. This does not revoke tokens at the authorization server.
+
+The Client ID Metadata Document URL must use HTTPS, include a non-root path, and omit embedded credentials and fragments. The document must list the inspector callback URL that appears in the authorization request.
 
 ## Token verification
 
-Verify access tokens as JWTs against the identity provider's JWKS endpoint. The [jose](https://github.com/panva/jose) library handles key fetching and caching:
+Verify all of these claims before returning `AuthInfo`:
 
-```ts
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+- Signature and signing algorithm
+- Issuer
+- Audience or resource indicator
+- Expiration and not-before time
+- Required scopes for the current MCP request
 
-const JWKS = createRemoteJWKSet(
-  new URL('https://auth.example.com/.well-known/jwks.json')
-);
-
-export async function auth(req: IncomingMessage): Promise<AuthInfo | null> {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return null;
-
-  const { payload } = await jwtVerify(token, JWKS, {
-    issuer: 'https://auth.example.com',
-  });
-
-  return {
-    token,
-    clientId: payload.sub as string,
-    scopes: (payload.scope as string)?.split(' ') ?? [],
-  };
-}
-```
-
-<Warning>
-MCP servers must validate that tokens were issued specifically for them. See [Token Handling](https://modelcontextprotocol.io/specification/latest/basic/authorization#token-handling) and [Access Token Privilege Restriction](https://modelcontextprotocol.io/specification/latest/basic/authorization#access-token-privilege-restriction) in the spec.
-</Warning>
-
-## Best practices
-
-<AccordionGroup>
-  <Accordion title="Defence-in-depth">
-    Always check `extra.authInfo` in protected tool handlers, even with HTTP-level enforcement. If the HTTP layer is misconfigured or bypassed, the tool handler catches unauthorized access.
-  </Accordion>
-
-  <Accordion title="Prefer per-tool auth for mixed apps">
-    If your app has both public and protected features, use per-tool auth. The initial load is fast (no login wall), and OAuth triggers only when needed. This creates a better user experience.
-  </Accordion>
-
-  <Accordion title="Keep auth stateless">
-    Use JWTs and verify them on every request. Don't store session state on the server — MCP connections may be distributed across multiple instances.
-  </Accordion>
-</AccordionGroup>
+Do not pass an upstream token through to another service unless that service is its intended audience.
 
 ## See also
 
 <Card horizontal title="Server Entry" icon="lock" href="/app-framework/tools/server-entry">
-  The `src/server.ts` auth export and `AuthInfo` type reference.
+  The `src/server.ts` entry point and `AuthInfo` type reference.
 </Card>
-<Card horizontal title="MCP Auth Specification" icon="link" href="https://modelcontextprotocol.io/specification/latest/basic/authorization">
-  Full OAuth authorization specification for MCP servers.
+<Card
+  horizontal
+  title="MCP Authorization"
+  icon="link"
+  href="https://modelcontextprotocol.io/specification/latest/basic/authorization"
+>
+  The current MCP OAuth requirements.
 </Card>

@@ -139,6 +139,7 @@
     "lint": "eslint . --ext .ts,.tsx --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:oauth-conformance": "node scripts/run-oauth-conformance.mjs",
     "test:e2e": "pnpm exec playwright test",
     "generate-examples": "node scripts/generate-examples.mjs",
     "validate": "node scripts/validate.mjs",

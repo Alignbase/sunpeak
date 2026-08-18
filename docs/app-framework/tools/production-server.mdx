@@ -1,7 +1,8 @@
 ---
-title: "Production Server"
-description: "API reference for production MCP server handlers."
-keywords: ["MCP Apps", "production server", "createMcpHandler", "createHandler", "serverless", "edge"]
+title: 'Production Server'
+description: 'API reference for production MCP server handlers.'
+keywords:
+  ['MCP Apps', 'production server', 'createMcpHandler', 'createHandler', 'serverless', 'edge']
 ---
 
 <Badge color="yellow">sunpeak API</Badge>
@@ -10,13 +11,13 @@ keywords: ["MCP Apps", "production server", "createMcpHandler", "createHandler",
 
 sunpeak provides three ways to run a production MCP server, from zero-config to full control:
 
-| Approach | Use case |
-|----------|----------|
-| `sunpeak start` | Zero-config — loads tools, resources, and auth from `dist/` automatically |
-| `createMcpHandler` | Node.js — mount the MCP handler on your own Express/Fastify/http server |
-| `createHandler` | Web Standard — Cloudflare Workers, Deno, Bun, Vercel Edge |
+| Approach           | Use case                                                                  |
+| ------------------ | ------------------------------------------------------------------------- |
+| `sunpeak start`    | Zero-config — loads tools, resources, and auth from `dist/` automatically |
+| `createMcpHandler` | Node.js — mount the MCP handler on your own Express/Fastify/http server   |
+| `createHandler`    | Web Standard — Cloudflare Workers, Deno, Bun, Vercel Edge                 |
 
-`sunpeak start` auto-discovers tools from `dist/tools/`, resources from `dist/{name}/`, and auth from `dist/server.js`, then passes them to `startProductionHttpServer` internally.
+`sunpeak start` auto-discovers tools from `dist/tools/`, resources from `dist/{name}/`, and the `auth` and `oauth` exports from `dist/server.js`, then passes them to `startProductionHttpServer` internally.
 
 `createMcpHandler` and `createHandler` accept these as config objects — you load and pass them yourself. This gives full control over how tools, resources, and auth are provided.
 
@@ -67,35 +68,64 @@ app.listen(3000);
 </ResponseField>
 
 <ResponseField name="serverInfo" type="ServerConfig">
-  Full server identity. Overrides `name` and `version` when provided. Supports additional fields like `title`, `description`, `websiteUrl`, `icons`, and `instructions` (sent in the MCP `initialize` response so hosts can inject it into the model's system prompt). See [Server Entry](/app-framework/tools/server-entry#server-object-optional) for the full field list.
+  Full server identity. Overrides `name` and `version` when provided. Supports additional fields
+  like `title`, `description`, `websiteUrl`, `icons`, and `instructions` (sent in the MCP
+  `initialize` response so hosts can inject it into the model's system prompt). See [Server
+  Entry](/app-framework/tools/server-entry#server-object-optional) for the full field list.
 </ResponseField>
 
 <ResponseField name="tools" type="ProductionTool[]" required>
-  Tool registrations. Each has a `name`, `tool` config (optional resource link, title, description), optional `schema` (Zod shape for input validation), and `handler` function. Tools without a `resource` are registered as plain MCP tools (no UI).
+  Tool registrations. Each has a `name`, `tool` config (optional resource link, title, description),
+  optional `schema` (Zod shape for input validation), and `handler` function. Tools without a
+  `resource` are registered as plain MCP tools (no UI).
 </ResponseField>
 
 <ResponseField name="resources" type="ProductionResource[]" required>
-  Resource registrations. Each has a `name`, `uri`, `html` (self-contained HTML string), and optional `_meta`.
+  Resource registrations. Each has a `name`, `uri`, `html` (self-contained HTML string), and
+  optional `_meta`.
 </ResponseField>
 
-<ResponseField name="auth" type="(req: IncomingMessage) => AuthInfo | null">
-  Auth function called on every request. Return `AuthInfo` to authenticate, `null` to reject with 401. See [Server Entry](/app-framework/tools/server-entry).
+<ResponseField
+  name="auth"
+  type="(req: IncomingMessage, context: AuthorizationContext) => AuthInfo | AuthorizationFailure | null"
+>
+  Auth function called on every request. Return `AuthInfo` to authenticate, `null` for an initial
+  401, or `AuthorizationFailure` for an invalid-token or insufficient-scope challenge.
+  `context.body` contains the parsed MCP request. See
+  [Authorization](/app-framework/guides/authorization).
+</ResponseField>
+
+<ResponseField name="oauth" type="OAuthProtectedResourceConfig">
+  Protected-resource discovery and bearer challenge configuration. When set, the handler serves RFC
+  9728 metadata at the root and endpoint-specific well-known paths and adds `resource_metadata` to
+  `WWW-Authenticate`.
 </ResponseField>
 
 <ResponseField name="serverUrl" type="string">
-  Public URL of the MCP server (e.g. `'https://example.com/mcp'`). Used to auto-compute a default `_meta.ui.domain` for resources that don't specify one. Without this, resources without an explicit domain may trigger host warnings (e.g. ChatGPT's "Widget domain is not set").
+  Public URL of the MCP server (e.g. `'https://example.com/mcp'`). Used to auto-compute a default
+  `_meta.ui.domain` for resources that don't specify one. Without this, resources without an
+  explicit domain may trigger host warnings (e.g. ChatGPT's "Widget domain is not set").
 </ResponseField>
 
 <ResponseField name="enableJsonResponse" type="boolean" default="true">
-  Respond with JSON instead of SSE streams. Recommended for serverless environments (Lambda, Workers, Vercel Edge) where holding open SSE connections is unreliable. Set to `false` if you need SSE streaming for long-running tool calls.
+  Respond with JSON instead of SSE streams. Recommended for serverless environments (Lambda,
+  Workers, Vercel Edge) where holding open SSE connections is unreliable. Set to `false` if you need
+  SSE streaming for long-running tool calls.
 </ResponseField>
 
 <ResponseField name="sseKeepAliveMs" type="number" default="15000">
-  Interval in milliseconds between SSE keep-alive comments when `enableJsonResponse` is `false`. Set to `0` to disable keep-alives.
+  Interval in milliseconds between SSE keep-alive comments when `enableJsonResponse` is `false`. Set
+  to `0` to disable keep-alives.
 </ResponseField>
 
 <ResponseField name="stateless" type="boolean" default="false">
-  Enable stateless v1 transport mode for serverless and horizontally-scaled deployments. When `true`, every request creates a fresh MCP server instance with no session tracking. This does not enable the core MCP `2026-07-28` wire protocol. The host is identified from HTTP headers (`User-Agent`, `x-anthropic-client`, `x-openai-session`) on every request. See [Serverless Deployment](/app-framework/guides/deployment#serverless--edge-deployment), [Horizontal Scaling](/app-framework/guides/deployment#horizontal-scaling), and [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28).
+  Enable stateless v1 transport mode for serverless and horizontally-scaled deployments. When
+  `true`, every request creates a fresh MCP server instance with no session tracking. This does not
+  enable the core MCP `2026-07-28` wire protocol. The host is identified from HTTP headers
+  (`User-Agent`, `x-anthropic-client`, `x-openai-session`) on every request. See [Serverless
+  Deployment](/app-framework/guides/deployment#serverless--edge-deployment), [Horizontal
+  Scaling](/app-framework/guides/deployment#horizontal-scaling), and [MCP 2026-07-28 for MCP
+  Apps](/mcp-apps/mcp/2026-07-28).
 </ResponseField>
 
 ## `createHandler`
@@ -135,10 +165,13 @@ export default app;
 
 ### `WebHandlerConfig`
 
-Same shape as `ProductionServerConfig` (including `enableJsonResponse`, `sseKeepAliveMs`, and `stateless`), except `auth` takes a Web Standard `Request`:
+Same shape as `ProductionServerConfig` (including `oauth`, `enableJsonResponse`, `sseKeepAliveMs`, and `stateless`), except `auth` takes a Web Standard `Request`:
 
-<ResponseField name="auth" type="(req: Request) => AuthInfo | null">
-  Auth function for Web Standard environments. Return `AuthInfo` to authenticate, `null` to reject with 401.
+<ResponseField
+  name="auth"
+  type="(req: Request, context: AuthorizationContext) => AuthInfo | AuthorizationFailure | null"
+>
+  Auth function for Web Standard environments. The return behavior matches the Node handler.
 </ResponseField>
 
 ## `startProductionHttpServer`

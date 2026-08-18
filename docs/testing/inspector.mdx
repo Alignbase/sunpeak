@@ -54,9 +54,21 @@ sunpeak inspect --server "python server.py" --cwd ./my-server
 
 ### Authentication
 
-sunpeak auto-negotiates MCP OAuth when connecting to servers that return 401 Unauthorized. For servers with auto-approved (anonymous) OAuth, this happens without user interaction. For servers requiring interactive login, sunpeak opens the authorization URL in your browser and waits for the callback.
+sunpeak auto-negotiates MCP OAuth when connecting to servers that return 401 Unauthorized. For servers with auto-approved OAuth, this happens without user interaction. For servers requiring interactive login, sunpeak opens the authorization URL in your browser and waits for the callback.
 
-No configuration is needed. sunpeak follows the [MCP OAuth specification](https://spec.modelcontextprotocol.io), discovering metadata from `/.well-known/oauth-protected-resource` and registering a client dynamically.
+sunpeak follows the [MCP OAuth specification](https://modelcontextprotocol.io/specification/latest/basic/authorization), including protected-resource discovery, authorization server discovery, PKCE, resource indicators, state validation, RFC 9207 callback issuer validation, token refresh, and scope challenges. It rejects mismatched authorization-server metadata issuers and servers that do not advertise PKCE S256 support.
+
+Authentication is collapsed by default and shows the active method and status in its header. It opens automatically when a tool returns an authorization challenge or OAuth fails. Choose OAuth, then open **OAuth settings** when you need to configure one of the standard client registration paths:
+
+- Leave the client fields empty to use Dynamic Client Registration.
+- Enter an HTTPS Client ID Metadata Document URL to use a URL-based client ID.
+- Enter a client ID and optional client secret to use a pre-registered client.
+
+For confidential pre-registered clients, the client-authentication selector supports automatic negotiation, HTTP Basic, request-body credentials, and public-client mode. If the resource advertises several authorization servers, choose an issuer before continuing; sunpeak stores registration data and tokens separately for each issuer.
+
+When a tool requires more scopes, sunpeak combines the new challenge with scopes requested earlier and starts a fresh authorization flow. **Clear local authorization** removes cached tokens, registration data, PKCE state, and discovery metadata without revoking tokens at the authorization server.
+
+The authorization server decides which registration paths it supports. Pre-registered credentials take priority, followed by a URL-based client ID, then Dynamic Client Registration.
 
 If you already have a token, pass it directly:
 

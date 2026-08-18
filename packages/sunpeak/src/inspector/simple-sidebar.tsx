@@ -390,9 +390,12 @@ export function SidebarControl({
 }
 
 interface SidebarCollapsibleControlProps {
-  label: string;
+  label: React.ReactNode;
   children: React.ReactNode;
   defaultCollapsed?: boolean;
+  /** Controlled expanded state. Omit to use `defaultCollapsed`. */
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
   className?: string;
   contentClassName?: string;
   style?: React.CSSProperties;
@@ -408,6 +411,8 @@ export function SidebarCollapsibleControl({
   label,
   children,
   defaultCollapsed = true,
+  expanded,
+  onExpandedChange,
   className,
   contentClassName,
   style,
@@ -416,7 +421,13 @@ export function SidebarCollapsibleControl({
   docsPath,
   'data-testid': testId,
 }: SidebarCollapsibleControlProps) {
-  const [isCollapsed, setIsCollapsed] = React.useState(defaultCollapsed);
+  const [internalCollapsed, setInternalCollapsed] = React.useState(defaultCollapsed);
+  const isCollapsed = expanded === undefined ? internalCollapsed : !expanded;
+  const toggle = () => {
+    const nextExpanded = isCollapsed;
+    if (expanded === undefined) setInternalCollapsed(!internalCollapsed);
+    onExpandedChange?.(nextExpanded);
+  };
 
   return (
     <div
@@ -425,7 +436,7 @@ export function SidebarCollapsibleControl({
       data-testid={testId}
     >
       <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={toggle}
         className="w-full flex items-center justify-between text-[10px] font-medium leading-tight transition-colors py-1 cursor-pointer"
         style={{ color: 'var(--color-text-secondary)' }}
         type="button"

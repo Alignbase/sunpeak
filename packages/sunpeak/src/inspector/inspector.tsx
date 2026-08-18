@@ -464,10 +464,38 @@ export function Inspector({
   const [oauthScopes, setOauthScopes] = React.useState('');
   const [oauthClientId, setOauthClientId] = React.useState('');
   const [oauthClientSecret, setOauthClientSecret] = React.useState('');
+  const [oauthClientMetadataUrl, setOauthClientMetadataUrl] = React.useState('');
+  const [oauthTokenEndpointAuthMethod, setOauthTokenEndpointAuthMethod] = React.useState('auto');
+  const [oauthAuthorizationServer, setOauthAuthorizationServer] = React.useState('');
+  const [oauthAuthorizationServers, setOauthAuthorizationServers] = React.useState<string[]>([]);
   const [oauthStatus, setOauthStatus] = React.useState<
     'none' | 'authorizing' | 'authorized' | 'error'
   >('none');
   const [oauthError, setOauthError] = React.useState<string | undefined>();
+  const [isAuthenticationExpanded, setIsAuthenticationExpanded] = React.useState(false);
+
+  React.useEffect(() => {
+    if (oauthError || oauthStatus === 'error') setIsAuthenticationExpanded(true);
+  }, [oauthError, oauthStatus]);
+
+  const handleOAuthRequired = React.useCallback((sunpeakMeta: Record<string, unknown>) => {
+    setAuthType('oauth');
+    const authorizationServers = Array.isArray(sunpeakMeta.authorizationServers)
+      ? sunpeakMeta.authorizationServers.filter(
+          (issuer): issuer is string => typeof issuer === 'string'
+        )
+      : [];
+    setOauthAuthorizationServers(authorizationServers);
+    setOauthAuthorizationServer((current) =>
+      authorizationServers.length > 1
+        ? authorizationServers.includes(current)
+          ? current
+          : authorizationServers[0]
+        : ''
+    );
+    setOauthStatus('none');
+    setOauthError('Additional authorization is required. Click Authorize to continue.');
+  }, []);
 
   // useMcpConnection does a mount-only health check for the initial URL.
   // URL changes are handled below via connection.reconnect().
@@ -751,10 +779,12 @@ export function Inspector({
     const urlChanged = serverUrl !== prevServerUrlRef.current;
     prevServerUrlRef.current = serverUrl;
     if (!urlChanged) return;
+    oauthCleanupRef.current?.();
+    setOauthStatus('none');
+    setOauthError(undefined);
+    setOauthAuthorizationServer('');
+    setOauthAuthorizationServers([]);
     if (serverUrl) {
-      // Reset OAuth status when URL changes
-      setOauthStatus('none');
-      setOauthError(undefined);
       if (authType === 'oauth') {
         // Don't auto-connect for OAuth — user must click Authorize
         return;
@@ -766,6 +796,7 @@ export function Inspector({
   // OAuth flow handler (disabled in demo mode)
   const handleStartOAuth = React.useCallback(async () => {
     if (!serverUrl || demoMode) return;
+    oauthCleanupRef.current?.();
     setOauthStatus('authorizing');
     setOauthError(undefined);
 
@@ -788,12 +819,17 @@ export function Inspector({
           scope: oauthScopes || undefined,
           clientId: oauthClientId || undefined,
           clientSecret: oauthClientSecret || undefined,
+          clientMetadataUrl: oauthClientMetadataUrl || undefined,
+          tokenEndpointAuthMethod:
+            oauthTokenEndpointAuthMethod === 'auto' ? undefined : oauthTokenEndpointAuthMethod,
+          authorizationServer: oauthAuthorizationServer || undefined,
         }),
       });
       const data = await readInspectorJson<{
         error?: string;
         status?: string;
         authUrl?: string;
+        authorizationServers?: string[];
         simulations?: Record<string, unknown>;
       }>(res, endpoint);
       if (!res.ok) {
@@ -817,6 +853,17 @@ export function Inspector({
         return;
       }
 
+      if (data.status === 'authorization_server_required' && data.authorizationServers?.length) {
+        popup?.close();
+        setOauthAuthorizationServers(data.authorizationServers);
+        setOauthAuthorizationServer((current) =>
+          data.authorizationServers!.includes(current) ? current : data.authorizationServers![0]
+        );
+        setOauthError('Select an authorization server, then click Authorize again.');
+        setOauthStatus('none');
+        return;
+      }
+
       if (data.status === 'redirect' && data.authUrl) {
         // Defense in depth: refuse to navigate the popup to anything that
         // isn't a real http(s) URL. The server validates this too, but a
@@ -834,6 +881,13 @@ export function Inspector({
         ) {
           popup?.close();
           setOauthError('OAuth authorization URL is not a valid http(s) URL.');
+          setOauthStatus('error');
+          return;
+        }
+        const expectedState = parsedAuthUrl.searchParams.get('state');
+        if (!expectedState) {
+          popup?.close();
+          setOauthError('OAuth authorization URL is missing the state parameter.');
           setOauthStatus('error');
           return;
         }
@@ -872,6 +926,7 @@ export function Inspector({
         oauthCleanupRef.current?.();
         oauthCleanupRef.current = cleanup;
         const handleOAuthResult = (result: Record<string, unknown>) => {
+          if (result.state !== expectedState) return;
           cleanup();
           if (result.error) {
             setOauthError((result.errorDescription || result.error) as string);
@@ -917,10 +972,34 @@ export function Inspector({
     oauthScopes,
     oauthClientId,
     oauthClientSecret,
+    oauthClientMetadataUrl,
+    oauthTokenEndpointAuthMethod,
+    oauthAuthorizationServer,
     demoMode,
     connection,
     inspectorApiBaseUrl,
   ]);
+
+  const handleClearOAuth = React.useCallback(async () => {
+    if (!serverUrl || demoMode) return;
+    const endpoint = inspectorApiEndpoint('/__sunpeak/oauth/reset', inspectorApiBaseUrl);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: serverUrl }),
+      });
+      const data = await readInspectorJson<{ error?: string }>(response, endpoint);
+      if (!response.ok) throw new Error(data.error || `OAuth reset failed (${response.status})`);
+      setOauthStatus('none');
+      setOauthError(undefined);
+      setOauthAuthorizationServer('');
+      setOauthAuthorizationServers([]);
+    } catch (error) {
+      setOauthStatus('error');
+      setOauthError(error instanceof Error ? error.message : String(error));
+    }
+  }, [serverUrl, demoMode, inspectorApiBaseUrl]);
 
   // When reconnecting to a new server succeeds, update simulations.
   // Only clear on error after a user-initiated reconnect (URL change), not on the
@@ -1000,11 +1079,15 @@ export function Inspector({
       // for non-sunpeak servers that don't include server-side timing.
       const resultMeta = (result as Record<string, unknown>)?._meta as
         Record<string, unknown> | undefined;
-      const serverMs = (resultMeta?._sunpeak as Record<string, unknown> | undefined)?.requestTimeMs;
+      const sunpeakMeta = resultMeta?._sunpeak as Record<string, unknown> | undefined;
+      if (sunpeakMeta?.oauthRequired === true) {
+        handleOAuthRequired(sunpeakMeta);
+      }
+      const serverMs = sunpeakMeta?.requestTimeMs;
       const durationMs = typeof serverMs === 'number' ? serverMs : clientMs;
       const resultWithTiming = {
         ...result,
-        _meta: { ...resultMeta, _sunpeak: { requestTimeMs: durationMs } },
+        _meta: { ...resultMeta, _sunpeak: { ...sunpeakMeta, requestTimeMs: durationMs } },
       };
       state.setToolResult(resultWithTiming);
       // Strip _sunpeak timing from the display JSON so the textarea shows the
@@ -1043,7 +1126,14 @@ export function Inspector({
     } finally {
       setIsRunning(false);
     }
-  }, [onCallTool, onCallToolDirect, simulations, effectiveSimulationName, state]);
+  }, [
+    onCallTool,
+    onCallToolDirect,
+    simulations,
+    effectiveSimulationName,
+    state,
+    handleOAuthRequired,
+  ]);
 
   const handleChatSubmit = React.useCallback(async () => {
     const prompt = chatInput.trim();
@@ -1382,7 +1472,16 @@ export function Inspector({
         }
       }
       if (onCallTool) {
-        return onCallTool(params);
+        const result = onCallTool(params);
+        return Promise.resolve(result).then((resolved) => {
+          const meta = (resolved as Record<string, unknown>)?._meta as
+            Record<string, unknown> | undefined;
+          const sunpeakMeta = meta?._sunpeak as Record<string, unknown> | undefined;
+          if (sunpeakMeta?.oauthRequired === true) {
+            handleOAuthRequired(sunpeakMeta);
+          }
+          return resolved;
+        });
       }
       return {
         content: [
@@ -1400,6 +1499,7 @@ export function Inspector({
       activeSimulationName,
       simulations,
       effectiveSimulationName,
+      handleOAuthRequired,
     ]
   );
 
@@ -1784,9 +1884,37 @@ export function Inspector({
                 {/* ── Authentication (hidden in demo mode) ── */}
                 {!demoMode && (
                   <SidebarCollapsibleControl
-                    key={`auth-${authType === 'none' ? 'none' : 'active'}`}
-                    label="Authentication"
-                    defaultCollapsed={false}
+                    label={
+                      <span className="flex items-center gap-1.5">
+                        <span>Authentication</span>
+                        <span
+                          className="rounded px-1 py-0.5 text-[8px] font-normal leading-none"
+                          style={{
+                            backgroundColor: 'var(--color-background-secondary)',
+                            color:
+                              oauthStatus === 'error'
+                                ? 'var(--color-text-danger, #dc2626)'
+                                : oauthStatus === 'authorized'
+                                  ? '#22c55e'
+                                  : 'var(--color-text-secondary)',
+                          }}
+                        >
+                          {authType === 'none'
+                            ? 'None'
+                            : authType === 'bearer'
+                              ? 'Bearer'
+                              : oauthStatus === 'authorized'
+                                ? 'OAuth · Authorized'
+                                : oauthStatus === 'authorizing'
+                                  ? 'OAuth · Authorizing'
+                                  : oauthStatus === 'error'
+                                    ? 'OAuth · Error'
+                                    : 'OAuth'}
+                        </span>
+                      </span>
+                    }
+                    expanded={isAuthenticationExpanded}
+                    onExpandedChange={setIsAuthenticationExpanded}
                   >
                     <div className="space-y-1">
                       <SidebarSelect
@@ -1829,27 +1957,67 @@ export function Inspector({
 
                       {authType === 'oauth' && (
                         <div className="space-y-1">
-                          <SidebarInput
-                            value={oauthClientId}
-                            onChange={setOauthClientId}
-                            applyOnBlur
-                            placeholder="Client ID (optional)"
-                          />
-                          {oauthClientId && (
-                            <SidebarInput
-                              type="password"
-                              value={oauthClientSecret}
-                              onChange={setOauthClientSecret}
-                              applyOnBlur
-                              placeholder="Client Secret (optional)"
+                          <SidebarCollapsibleControl label="OAuth settings">
+                            <div className="space-y-1">
+                              <SidebarInput
+                                value={oauthClientId}
+                                onChange={setOauthClientId}
+                                applyOnBlur
+                                placeholder="Client ID (optional)"
+                              />
+                              {!oauthClientId && (
+                                <SidebarInput
+                                  value={oauthClientMetadataUrl}
+                                  onChange={setOauthClientMetadataUrl}
+                                  applyOnBlur
+                                  placeholder="Client metadata URL (optional)"
+                                />
+                              )}
+                              {oauthClientId && (
+                                <>
+                                  <SidebarInput
+                                    type="password"
+                                    value={oauthClientSecret}
+                                    onChange={setOauthClientSecret}
+                                    applyOnBlur
+                                    placeholder="Client Secret (optional)"
+                                  />
+                                  <SidebarSelect
+                                    value={oauthTokenEndpointAuthMethod}
+                                    onChange={setOauthTokenEndpointAuthMethod}
+                                    options={[
+                                      { value: 'auto', label: 'Client auth: Auto' },
+                                      {
+                                        value: 'client_secret_basic',
+                                        label: 'Client auth: HTTP Basic',
+                                      },
+                                      {
+                                        value: 'client_secret_post',
+                                        label: 'Client auth: Request body',
+                                      },
+                                      { value: 'none', label: 'Client auth: None' },
+                                    ]}
+                                  />
+                                </>
+                              )}
+                              <SidebarInput
+                                value={oauthScopes}
+                                onChange={setOauthScopes}
+                                applyOnBlur
+                                placeholder="Scopes (optional)"
+                              />
+                            </div>
+                          </SidebarCollapsibleControl>
+                          {oauthAuthorizationServers.length > 1 && (
+                            <SidebarSelect
+                              value={oauthAuthorizationServer}
+                              onChange={setOauthAuthorizationServer}
+                              options={oauthAuthorizationServers.map((issuer) => ({
+                                value: issuer,
+                                label: issuer,
+                              }))}
                             />
                           )}
-                          <SidebarInput
-                            value={oauthScopes}
-                            onChange={setOauthScopes}
-                            applyOnBlur
-                            placeholder="Scopes (optional)"
-                          />
                           <button
                             type="button"
                             onClick={handleStartOAuth}
@@ -1869,6 +2037,20 @@ export function Inspector({
                                 ? 'Authorized'
                                 : 'Authorize'}
                           </button>
+                          {(oauthStatus === 'authorized' ||
+                            oauthAuthorizationServers.length > 0) && (
+                            <button
+                              type="button"
+                              onClick={handleClearOAuth}
+                              className="w-full h-7 text-xs rounded-md px-2 transition-colors cursor-pointer"
+                              style={{
+                                border: '1px solid var(--color-border-primary)',
+                                color: 'var(--color-text-secondary)',
+                              }}
+                            >
+                              Clear local authorization
+                            </button>
+                          )}
                           {oauthError && (
                             <div
                               className="text-[9px]"

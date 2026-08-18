@@ -147,28 +147,113 @@ function hasAuthorizationHeader(headers) {
  * When `redirectToAuthorization()` is called, it stores the URL for retrieval.
  *
  * @param {string} redirectUrl - The callback URL for OAuth redirects
- * @param {{ clientId?: string, clientSecret?: string }} [opts]
+ * @param {{ clientId?: string, clientSecret?: string, clientMetadataUrl?: string, tokenEndpointAuthMethod?: 'client_secret_basic' | 'client_secret_post' | 'none', applicationType?: 'native' | 'web', scope?: string, authorizationServer?: string }} [opts]
  * @returns {{ provider: import('@modelcontextprotocol/sdk/client/auth.js').OAuthClientProvider, getAuthUrl: () => URL | undefined }}
  */
 function createInMemoryOAuthProvider(redirectUrl, opts = {}) {
-  let _tokens;
-  let _clientInfo;
-  let _codeVerifier;
   let _authUrl;
   let _discoveryState;
+  let _candidateDiscoveryState;
+  let _activeIssuer;
+  let _selectedAuthorizationServer = opts.authorizationServer;
+  const _credentialStores = new Map();
   // Cryptographic state parameter for CSRF protection on the OAuth callback.
-  const _stateParam = crypto.randomUUID();
+  let _stateParam = crypto.randomUUID();
+  const redirect = new URL(redirectUrl);
+  const applicationType =
+    opts.applicationType ??
+    (redirect.hostname === 'localhost' ||
+    redirect.hostname === '127.0.0.1' ||
+    redirect.hostname === '[::1]'
+      ? 'native'
+      : 'web');
+  let clientMetadataUrl;
+  if (opts.clientMetadataUrl) {
+    clientMetadataUrl = new URL(opts.clientMetadataUrl);
+    if (
+      clientMetadataUrl.protocol !== 'https:' ||
+      clientMetadataUrl.pathname === '/' ||
+      clientMetadataUrl.hash ||
+      clientMetadataUrl.username ||
+      clientMetadataUrl.password
+    ) {
+      throw new Error(
+        'OAuth client metadata URL must use https, have a non-root path, and omit credentials and fragments'
+      );
+    }
+  }
 
-  // If pre-registered client credentials were provided, seed the client info
-  // so the SDK skips dynamic client registration.
-  if (opts.clientId) {
-    _clientInfo = {
-      client_id: opts.clientId,
-      ...(opts.clientSecret ? { client_secret: opts.clientSecret } : {}),
-    };
+  const configuredScopes = new Set((opts.scope ?? '').split(/\s+/).filter(Boolean));
+  const configuration = JSON.stringify({
+    clientId: opts.clientId ?? '',
+    clientSecret: opts.clientSecret ?? '',
+    clientMetadataUrl: opts.clientMetadataUrl ?? '',
+    tokenEndpointAuthMethod: opts.tokenEndpointAuthMethod ?? '',
+    applicationType: opts.applicationType ?? '',
+    scope: opts.scope ?? '',
+  });
+  const unboundStore = {
+    clientInfo: opts.clientId
+      ? {
+          client_id: opts.clientId,
+          ...(opts.clientSecret ? { client_secret: opts.clientSecret } : {}),
+          ...(opts.tokenEndpointAuthMethod
+            ? { token_endpoint_auth_method: opts.tokenEndpointAuthMethod }
+            : {}),
+        }
+      : undefined,
+    tokens: undefined,
+    codeVerifier: undefined,
+    requestedScopes: new Set(configuredScopes),
+    forceReauthorization: false,
+  };
+
+  function currentStore() {
+    if (!_activeIssuer) return unboundStore;
+    let store = _credentialStores.get(_activeIssuer);
+    if (!store) {
+      store = {
+        clientInfo: undefined,
+        tokens: undefined,
+        codeVerifier: undefined,
+        requestedScopes: new Set(configuredScopes),
+        forceReauthorization: false,
+      };
+      _credentialStores.set(_activeIssuer, store);
+    }
+    return store;
+  }
+
+  function bindToIssuer(issuer) {
+    if (!_credentialStores.has(issuer)) {
+      _credentialStores.set(issuer, {
+        ...unboundStore,
+        requestedScopes: new Set(unboundStore.requestedScopes),
+      });
+      unboundStore.clientInfo = undefined;
+      unboundStore.tokens = undefined;
+      unboundStore.codeVerifier = undefined;
+    }
+    _activeIssuer = issuer;
+  }
+
+  function requestedScope() {
+    const scopes = [...currentStore().requestedScopes];
+    return scopes.length ? scopes.join(' ') : undefined;
+  }
+
+  function noteChallenge(scope, error, resourceMetadataUrl) {
+    const store = currentStore();
+    for (const value of (scope ?? '').split(/\s+/).filter(Boolean)) {
+      store.requestedScopes.add(value);
+    }
+    if (error === 'insufficient_scope') store.forceReauthorization = true;
+    if (_discoveryState && resourceMetadataUrl) _discoveryState = undefined;
+    return requestedScope();
   }
 
   const provider = {
+    ...(clientMetadataUrl ? { clientMetadataUrl: clientMetadataUrl.toString() } : {}),
     get redirectUrl() {
       return redirectUrl;
     },
@@ -176,52 +261,377 @@ function createInMemoryOAuthProvider(redirectUrl, opts = {}) {
       return {
         redirect_uris: [new URL(redirectUrl)],
         client_name: 'sunpeak Inspector',
-        token_endpoint_auth_method: opts.clientSecret ? 'client_secret_post' : 'none',
+        application_type: applicationType,
+        token_endpoint_auth_method:
+          opts.tokenEndpointAuthMethod ?? (opts.clientSecret ? 'client_secret_basic' : 'none'),
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
+        ...(requestedScope() ? { scope: requestedScope() } : {}),
       };
     },
     // Return the state parameter so the SDK includes it in the authorization URL.
     state() {
+      _stateParam = crypto.randomUUID();
       return _stateParam;
     },
     clientInformation() {
-      return _clientInfo;
+      return currentStore().clientInfo;
     },
     saveClientInformation(info) {
-      _clientInfo = info;
+      currentStore().clientInfo = info;
     },
     tokens() {
-      return _tokens;
+      const store = currentStore();
+      if (!store.forceReauthorization || !store.tokens) return store.tokens;
+      const { refresh_token: _refreshToken, ...tokensWithoutRefresh } = store.tokens;
+      return tokensWithoutRefresh;
     },
     saveTokens(tokens) {
-      _tokens = tokens;
+      const store = currentStore();
+      store.tokens = tokens;
+      store.forceReauthorization = false;
+      for (const scope of (tokens.scope ?? '').split(/\s+/).filter(Boolean)) {
+        store.requestedScopes.add(scope);
+      }
+      _authUrl = undefined;
     },
     redirectToAuthorization(url) {
-      _authUrl = url;
+      const authorizationUrl = new URL(url);
+      const scopes = new Set(
+        (authorizationUrl.searchParams.get('scope') ?? '').split(/\s+/).filter(Boolean)
+      );
+      for (const scope of currentStore().requestedScopes) scopes.add(scope);
+      if (scopes.size) authorizationUrl.searchParams.set('scope', [...scopes].join(' '));
+      _authUrl = authorizationUrl;
     },
     saveCodeVerifier(verifier) {
-      _codeVerifier = verifier;
+      currentStore().codeVerifier = verifier;
     },
     codeVerifier() {
-      return _codeVerifier;
+      return currentStore().codeVerifier;
     },
     // Cache discovery state so the second auth() call (token exchange)
     // doesn't re-discover metadata from scratch.
     saveDiscoveryState(state) {
+      _candidateDiscoveryState = state;
+      const authorizationServers = state?.resourceMetadata?.authorization_servers ?? [];
+      const selectedAuthorizationServer = String(state?.authorizationServerUrl ?? '');
+      if (
+        _selectedAuthorizationServer &&
+        authorizationServers.length === 1 &&
+        !authorizationServers.includes(_selectedAuthorizationServer)
+      ) {
+        _selectedAuthorizationServer = authorizationServers[0];
+      }
+      if (_selectedAuthorizationServer) {
+        if (
+          authorizationServers.length > 0 &&
+          !authorizationServers.includes(_selectedAuthorizationServer)
+        ) {
+          throw new Error('Selected OAuth authorization server is not advertised by the resource');
+        }
+        if (selectedAuthorizationServer !== _selectedAuthorizationServer) {
+          throw new Error('OAuth authorization server selection is required');
+        }
+      } else if (authorizationServers.length > 1) {
+        throw new Error('OAuth authorization server selection is required');
+      }
+
+      validateOAuthDiscoveryState(state, opts.tokenEndpointAuthMethod);
+      const nextIssuer = getOAuthIssuer(state);
+      bindToIssuer(nextIssuer);
+      // This client advertises the refresh_token grant. Request offline_access
+      // only when the selected server explicitly supports it, as required by
+      // the MCP refresh-token guidance.
+      if (state.authorizationServerMetadata?.scopes_supported?.includes('offline_access')) {
+        currentStore().requestedScopes.add('offline_access');
+      }
       _discoveryState = state;
     },
     discoveryState() {
       return _discoveryState;
     },
+    invalidateCredentials(scope) {
+      if (scope === 'all') {
+        _credentialStores.clear();
+        _activeIssuer = undefined;
+        unboundStore.clientInfo = undefined;
+        unboundStore.tokens = undefined;
+        unboundStore.codeVerifier = undefined;
+        unboundStore.requestedScopes = new Set(configuredScopes);
+        unboundStore.forceReauthorization = false;
+        _authUrl = undefined;
+        _discoveryState = undefined;
+        _candidateDiscoveryState = undefined;
+        return;
+      }
+      const store = currentStore();
+      if (scope === 'tokens') store.tokens = undefined;
+      if (scope === 'verifier') store.codeVerifier = undefined;
+      if (scope === 'discovery') _discoveryState = undefined;
+      if (scope === 'client') store.clientInfo = undefined;
+    },
+    _sunpeakNoteChallenge: noteChallenge,
   };
 
   return {
     provider,
     getAuthUrl: () => _authUrl,
-    hasTokens: () => !!_tokens,
-    stateParam: _stateParam,
+    hasTokens: () => !!currentStore().tokens,
+    getDiscoveryState: () => _discoveryState,
+    getCandidateDiscoveryState: () => _candidateDiscoveryState,
+    getAuthorizationServers: () =>
+      _candidateDiscoveryState?.resourceMetadata?.authorization_servers ?? [],
+    getActiveIssuer: () => _activeIssuer,
+    matchesConfiguration(candidate) {
+      return (
+        configuration ===
+        JSON.stringify({
+          clientId: candidate.clientId ?? '',
+          clientSecret: candidate.clientSecret ?? '',
+          clientMetadataUrl: candidate.clientMetadataUrl ?? '',
+          tokenEndpointAuthMethod: candidate.tokenEndpointAuthMethod ?? '',
+          applicationType: candidate.applicationType ?? '',
+          scope: candidate.scope ?? '',
+        })
+      );
+    },
+    selectAuthorizationServer(authorizationServer) {
+      _selectedAuthorizationServer = authorizationServer;
+    },
+    noteChallenge,
+    get stateParam() {
+      return _stateParam;
+    },
   };
+}
+
+function assertSecureOAuthUrl(value, label) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${label} must be an absolute URL`);
+  }
+  const loopback =
+    url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
+    throw new Error(`${label} must use https unless it is on localhost`);
+  }
+  if (url.username || url.password) {
+    throw new Error(`${label} must not contain credentials`);
+  }
+  if (url.hash) {
+    throw new Error(`${label} must not contain a fragment`);
+  }
+  return url;
+}
+
+function validateOAuthDiscoveryState(state, tokenEndpointAuthMethod) {
+  const authorizationServer = String(state?.authorizationServerUrl ?? '');
+  const metadata = state?.authorizationServerMetadata;
+  if (!authorizationServer || !metadata) {
+    throw new Error('OAuth authorization server metadata is required');
+  }
+  assertSecureOAuthUrl(authorizationServer, 'OAuth authorization server');
+  if (!metadata.issuer || metadata.issuer !== authorizationServer) {
+    throw new Error('OAuth authorization server metadata issuer mismatch');
+  }
+  assertSecureOAuthUrl(metadata.issuer, 'OAuth authorization server issuer');
+  assertSecureOAuthUrl(metadata.authorization_endpoint, 'OAuth authorization endpoint');
+  assertSecureOAuthUrl(metadata.token_endpoint, 'OAuth token endpoint');
+  if (metadata.registration_endpoint) {
+    assertSecureOAuthUrl(metadata.registration_endpoint, 'OAuth registration endpoint');
+  }
+  if (!metadata.code_challenge_methods_supported?.includes('S256')) {
+    throw new Error('OAuth authorization server metadata must advertise PKCE S256 support');
+  }
+  if (
+    tokenEndpointAuthMethod &&
+    metadata.token_endpoint_auth_methods_supported?.length &&
+    !metadata.token_endpoint_auth_methods_supported.includes(tokenEndpointAuthMethod)
+  ) {
+    throw new Error(
+      `OAuth authorization server does not support ${tokenEndpointAuthMethod} client authentication`
+    );
+  }
+}
+
+function rewriteOAuthChallenge(response, oauthState) {
+  if (response.status !== 401 && response.status !== 403) return response;
+  const header = response.headers.get('www-authenticate');
+  if (!header || !/^Bearer\s/i.test(header)) return response;
+  const scopeMatch = header.match(/(?:^|[,\s])scope=(?:"([^"]*)"|([^\s,]+))/i);
+  const errorMatch = header.match(/(?:^|[,\s])error=(?:"([^"]*)"|([^\s,]+))/i);
+  const resourceMetadataMatch = header.match(
+    /(?:^|[,\s])resource_metadata=(?:"([^"]*)"|([^\s,]+))/i
+  );
+  const scope = scopeMatch?.[1] ?? scopeMatch?.[2];
+  const error = errorMatch?.[1] ?? errorMatch?.[2];
+  const resourceMetadataUrl = resourceMetadataMatch?.[1] ?? resourceMetadataMatch?.[2];
+  const accumulatedScope = oauthState.noteChallenge(scope, error, resourceMetadataUrl);
+  if (!accumulatedScope || accumulatedScope === scope) return response;
+
+  const nextHeader = scopeMatch
+    ? header.replace(scopeMatch[0], scopeMatch[0].replace(scope, accumulatedScope))
+    : `${header}, scope="${accumulatedScope.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  const headers = new Headers(response.headers);
+  headers.set('www-authenticate', nextHeader);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function createOAuthAwareFetch(oauthState, fetchFn = fetch) {
+  return async (input, init) => rewriteOAuthChallenge(await fetchFn(input, init), oauthState);
+}
+
+function createOAuthProviderAwareFetch(provider, fetchFn = fetch) {
+  if (typeof provider?._sunpeakNoteChallenge !== 'function') return fetchFn;
+  return async (input, init) => {
+    const response = await fetchFn(input, init);
+    return rewriteOAuthChallenge(response, {
+      noteChallenge: provider._sunpeakNoteChallenge,
+    });
+  };
+}
+
+function createPublicOAuthFetch(fetchFn = fetch) {
+  return async (input, init = {}) => {
+    let currentInput = input;
+    let currentInit = { ...init, redirect: 'manual' };
+
+    for (let redirects = 0; redirects <= 5; redirects++) {
+      const currentUrl =
+        currentInput instanceof Request
+          ? currentInput.url
+          : currentInput instanceof URL
+            ? currentInput.toString()
+            : String(currentInput);
+      await assertHttpServerUrlAllowed(currentUrl);
+
+      const response = await fetchFn(currentInput, currentInit);
+      const location = response.headers.get('location');
+      if (response.status < 300 || response.status >= 400 || !location) return response;
+
+      const method = String(
+        currentInit.method ?? (currentInput instanceof Request ? currentInput.method : 'GET')
+      ).toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD') {
+        await response.body?.cancel?.();
+        throw new Error('OAuth endpoint redirects are not allowed for requests with a body');
+      }
+      if (redirects === 5) {
+        await response.body?.cancel?.();
+        throw new Error('OAuth endpoint exceeded the redirect limit');
+      }
+
+      const nextUrl = new URL(location, currentUrl);
+      await assertHttpServerUrlAllowed(nextUrl.toString());
+      const headers = new Headers(
+        currentInit.headers ?? (currentInput instanceof Request ? currentInput.headers : undefined)
+      );
+      if (nextUrl.origin !== new URL(currentUrl).origin) {
+        headers.delete('authorization');
+        headers.delete('cookie');
+        headers.delete('proxy-authorization');
+      }
+      await response.body?.cancel?.();
+      currentInput = nextUrl;
+      currentInit = { ...currentInit, method, headers, body: undefined, redirect: 'manual' };
+    }
+
+    throw new Error('OAuth endpoint exceeded the redirect limit');
+  };
+}
+
+async function configureOAuthAuthorizationServer(oauthState, authorizationServer, fetchFn = fetch) {
+  const candidate = oauthState.getCandidateDiscoveryState();
+  const advertised = candidate?.resourceMetadata?.authorization_servers ?? [];
+  if (!advertised.includes(authorizationServer)) {
+    throw new Error('Selected OAuth authorization server is not advertised by the resource');
+  }
+  const { discoverAuthorizationServerMetadata } =
+    await import('@modelcontextprotocol/sdk/client/auth.js');
+  const metadata = await discoverAuthorizationServerMetadata(authorizationServer, { fetchFn });
+  oauthState.selectAuthorizationServer(authorizationServer);
+  await oauthState.provider.saveDiscoveryState({
+    ...candidate,
+    authorizationServerUrl: authorizationServer,
+    authorizationServerMetadata: metadata,
+  });
+}
+
+async function selectOAuthAuthorizationServer(authorizationServers) {
+  if (authorizationServers.length === 1 || !process.stdin.isTTY || !process.stdout.isTTY) {
+    return authorizationServers[0];
+  }
+  console.log('The resource advertises multiple OAuth authorization servers:');
+  authorizationServers.forEach((issuer, index) => console.log(`  ${index + 1}. ${issuer}`));
+  const { createInterface } = await import('node:readline/promises');
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await prompt.question('Select an authorization server [1]: ');
+    const index = answer.trim() === '' ? 0 : Number(answer) - 1;
+    if (!Number.isInteger(index) || index < 0 || index >= authorizationServers.length) {
+      throw new Error('Invalid OAuth authorization server selection');
+    }
+    return authorizationServers[index];
+  } finally {
+    prompt.close();
+  }
+}
+
+function getOAuthIssuer(discoveryState) {
+  const metadataIssuer = discoveryState?.authorizationServerMetadata?.issuer;
+  if (typeof metadataIssuer === 'string') return metadataIssuer;
+  const issuer = discoveryState?.authorizationServerUrl;
+  return issuer instanceof URL
+    ? issuer.toString()
+    : typeof issuer === 'string'
+      ? issuer
+      : undefined;
+}
+
+/**
+ * Validate an OAuth authorization response before using its code or error.
+ * RFC 9207 requires exact issuer matching, without URL normalization.
+ *
+ * @param {URLSearchParams | Record<string, string | null | undefined>} params
+ * @param {string} expectedState
+ * @param {unknown} discoveryState
+ * @returns {string}
+ */
+function validateOAuthAuthorizationResponse(params, expectedState, discoveryState) {
+  const get = (name) =>
+    params instanceof URLSearchParams ? params.get(name) : (params[name] ?? null);
+  const state = get('state');
+  if (!state || state !== expectedState) {
+    throw new Error('OAuth state mismatch: callback rejected');
+  }
+
+  const expectedIssuer = getOAuthIssuer(discoveryState);
+  const issuer = get('iss');
+  const issuerRequired =
+    discoveryState?.authorizationServerMetadata?.authorization_response_iss_parameter_supported ===
+    true;
+  if (issuer && (!expectedIssuer || issuer !== expectedIssuer)) {
+    throw new Error('OAuth issuer mismatch: callback rejected');
+  }
+  if (issuerRequired && !issuer) {
+    throw new Error('OAuth callback is missing the required issuer parameter');
+  }
+
+  const error = get('error');
+  if (error) {
+    const description = get('error_description');
+    throw new Error(`OAuth authorization failed: ${error}${description ? `: ${description}` : ''}`);
+  }
+  const code = get('code');
+  if (!code) throw new Error('OAuth callback did not include an authorization code');
+  return code;
 }
 
 /**
@@ -318,24 +728,44 @@ async function negotiateOAuth(serverUrl) {
 
   // Start a temporary callback server for receiving the OAuth code.
   const callbackPort = await getPort(24681);
-  const callbackUrl = `http://localhost:${callbackPort}/oauth/callback`;
+  const callbackUrl = `http://127.0.0.1:${callbackPort}/oauth/callback`;
 
   const oauthState = createInMemoryOAuthProvider(callbackUrl);
   const { provider } = oauthState;
-  const resourceMetadataUrl = await resolveMcpResourceMetadataUrl(serverUrl);
-
-  // First call to auth() — discovers metadata, registers client, and either
-  // returns AUTHORIZED (client_credentials) or REDIRECT (authorization_code).
-  const result = await auth(provider, {
-    serverUrl: new URL(serverUrl),
-    ...(resourceMetadataUrl ? { resourceMetadataUrl: new URL(resourceMetadataUrl) } : {}),
-  });
-
-  if (result === 'AUTHORIZED') {
+  // Let the transport process the real bearer challenge first so its
+  // resource_metadata and scope values remain authoritative.
+  try {
+    const connection = await createMcpConnection(serverUrl, {
+      type: 'oauth',
+      authProvider: provider,
+    });
+    await connection.client.close();
     return provider;
+  } catch {
+    const authorizationServers = oauthState.getAuthorizationServers();
+    if (authorizationServers.length > 1) {
+      const selected = await selectOAuthAuthorizationServer(authorizationServers);
+      await configureOAuthAuthorizationServer(
+        oauthState,
+        selected,
+        createOAuthAwareFetch(oauthState)
+      );
+      const result = await auth(provider, {
+        serverUrl: new URL(serverUrl),
+        fetchFn: createOAuthProviderAwareFetch(provider),
+      });
+      if (result === 'AUTHORIZED') return provider;
+    } else if (!oauthState.getAuthUrl()) {
+      const resourceMetadataUrl = await resolveMcpResourceMetadataUrl(serverUrl);
+      const result = await auth(provider, {
+        serverUrl: new URL(serverUrl),
+        ...(resourceMetadataUrl ? { resourceMetadataUrl: new URL(resourceMetadataUrl) } : {}),
+        fetchFn: createOAuthProviderAwareFetch(provider),
+      });
+      if (result === 'AUTHORIZED') return provider;
+    }
   }
 
-  // result === 'REDIRECT': we need to follow the authorization URL.
   const authUrl = oauthState.getAuthUrl();
   if (!authUrl) {
     throw new Error('OAuth flow returned REDIRECT but no authorization URL was captured');
@@ -350,12 +780,19 @@ async function negotiateOAuth(serverUrl) {
 
   // Try the anonymous/auto-approved path first: follow the authorization URL
   // without a browser and see if it immediately redirects with a code.
-  const code = await tryAnonymousOAuth(authUrl.toString(), callbackUrl, oauthState.stateParam);
+  const code = await tryAnonymousOAuth(
+    authUrl.toString(),
+    callbackUrl,
+    oauthState.stateParam,
+    fetch,
+    oauthState.getDiscoveryState()
+  );
   if (code) {
     // Complete the flow with the authorization code.
     const tokenResult = await auth(provider, {
       serverUrl: new URL(serverUrl),
       authorizationCode: code,
+      fetchFn: createOAuthProviderAwareFetch(provider),
     });
     if (tokenResult === 'AUTHORIZED') {
       return provider;
@@ -369,12 +806,14 @@ async function negotiateOAuth(serverUrl) {
     authUrl.toString(),
     callbackUrl,
     callbackPort,
-    oauthState.stateParam
+    oauthState.stateParam,
+    oauthState.getDiscoveryState()
   );
 
   const tokenResult = await auth(provider, {
     serverUrl: new URL(serverUrl),
     authorizationCode: interactiveCode,
+    fetchFn: createOAuthProviderAwareFetch(provider),
   });
   if (tokenResult === 'AUTHORIZED') {
     return provider;
@@ -393,7 +832,13 @@ async function negotiateOAuth(serverUrl) {
  * @param {typeof fetch} [fetchFn]
  * @returns {Promise<string | null>}
  */
-async function tryAnonymousOAuth(authUrl, callbackUrl, expectedState, fetchFn = fetch) {
+async function tryAnonymousOAuth(
+  authUrl,
+  callbackUrl,
+  expectedState,
+  fetchFn = fetch,
+  discoveryState
+) {
   // Follow redirects manually to detect when the server redirects back
   // to our callback URL with a code parameter.
   let url = authUrl;
@@ -409,6 +854,8 @@ async function tryAnonymousOAuth(authUrl, callbackUrl, expectedState, fetchFn = 
       return null;
     }
 
+    await response.body?.cancel?.();
+
     // Resolve relative redirects.
     const resolvedUrl = new URL(location, url);
     if (resolvedUrl.protocol !== 'http:' && resolvedUrl.protocol !== 'https:') {
@@ -419,21 +866,10 @@ async function tryAnonymousOAuth(authUrl, callbackUrl, expectedState, fetchFn = 
     const resolved = resolvedUrl.toString();
 
     // Check if the redirect goes to our callback URL.
-    if (resolved.startsWith(callbackUrl)) {
+    const callback = new URL(callbackUrl);
+    if (resolvedUrl.origin === callback.origin && resolvedUrl.pathname === callback.pathname) {
       const params = new URL(resolved).searchParams;
-      const state = params.get('state');
-      if (expectedState && state !== expectedState) {
-        throw new Error('OAuth state mismatch — callback rejected');
-      }
-      const code = params.get('code');
-      if (code) return code;
-      const error = params.get('error');
-      if (error) {
-        throw new Error(
-          `OAuth authorization failed: ${error} — ${params.get('error_description') || ''}`
-        );
-      }
-      return null;
+      return validateOAuthAuthorizationResponse(params, expectedState, discoveryState);
     }
 
     url = resolved;
@@ -452,7 +888,13 @@ async function tryAnonymousOAuth(authUrl, callbackUrl, expectedState, fetchFn = 
  * @param {number} callbackPort - Port for the callback server
  * @returns {Promise<string>}
  */
-async function waitForInteractiveOAuth(authUrl, callbackUrl, callbackPort, expectedState) {
+async function waitForInteractiveOAuth(
+  authUrl,
+  callbackUrl,
+  callbackPort,
+  expectedState,
+  discoveryState
+) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const settle = (fn, value) => {
@@ -465,53 +907,41 @@ async function waitForInteractiveOAuth(authUrl, callbackUrl, callbackPort, expec
 
     const server = createHttpServer((req, res) => {
       const reqUrl = new URL(req.url, callbackUrl);
-      if (!reqUrl.pathname.startsWith('/oauth/callback')) {
+      if (reqUrl.pathname !== '/oauth/callback') {
         res.writeHead(404);
         res.end('Not found');
         return;
       }
 
-      const code = reqUrl.searchParams.get('code');
-      const error = reqUrl.searchParams.get('error');
-      const stateParam = reqUrl.searchParams.get('state');
-
-      // CSRF protection: the callback must echo back the state value that we
-      // generated for this authorization request. Without this check, any
-      // local process (or page the user visits while the flow is pending)
-      // could submit an attacker-controlled `code` to our callback server.
-      if (expectedState && stateParam !== expectedState) {
+      let code;
+      try {
+        code = validateOAuthAuthorizationResponse(
+          reqUrl.searchParams,
+          expectedState,
+          discoveryState
+        );
+      } catch (error) {
         res.writeHead(400, { 'Content-Type': 'text/html' });
         res.end(
-          '<!DOCTYPE html><html><body><p>Authorization rejected: state mismatch.</p></body></html>'
+          '<!DOCTYPE html><html><body><p>Authorization response was rejected.</p></body></html>'
         );
-        settle(reject, new Error('OAuth state mismatch — callback rejected'));
+        settle(reject, error);
         return;
       }
 
       // Serve a simple page that tells the user they can close the tab.
-      const escHtml = (s) =>
-        s.replace(
-          /[<>&"']/g,
-          (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[c]
-        );
-      const message = code
-        ? 'Authorization complete. You can close this tab.'
-        : `Authorization failed: ${escHtml(error || 'unknown error')}`;
+      const message = 'Authorization complete. You can close this tab.';
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`<!DOCTYPE html><html><body><p>${message}</p></body></html>`);
 
-      if (code) {
-        settle(resolve, code);
-      } else {
-        settle(reject, new Error(`OAuth authorization failed: ${error || 'unknown error'}`));
-      }
+      settle(resolve, code);
     });
 
     server.on('error', (err) => {
       settle(reject, new Error(`OAuth callback server failed: ${err.message}`));
     });
 
-    server.listen(callbackPort, async () => {
+    server.listen(callbackPort, '127.0.0.1', async () => {
       console.log('Opening browser for OAuth authorization...');
       // Use execFile with array args to avoid shell injection from the auth URL.
       const { execFile } = await import('child_process');
@@ -832,7 +1262,7 @@ async function createMcpConnection(serverArg, authConfig) {
           'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] },
         },
       },
-    },
+    }
   );
 
   if (serverArg.startsWith('http://') || serverArg.startsWith('https://')) {
@@ -878,6 +1308,8 @@ async function createMcpConnection(serverArg, authConfig) {
 
     if (authConfig?.type === 'oauth' && authConfig.authProvider) {
       transportOpts.authProvider = authConfig.authProvider;
+      const oauthFetch = authConfig.enforcePublicHttpUrl ? createPublicOAuthFetch() : fetch;
+      transportOpts.fetch = createOAuthProviderAwareFetch(authConfig.authProvider, oauthFetch);
     }
 
     const transport = new StreamableHTTPClientTransport(new URL(finalUrl), transportOpts);
@@ -1552,10 +1984,7 @@ function sanitizeAiSdkSchemaNode(schema) {
     !Array.isArray(clean.properties)
   ) {
     clean.properties = Object.fromEntries(
-      Object.entries(clean.properties).map(([key, value]) => [
-        key,
-        sanitizeAiSdkSchemaNode(value),
-      ])
+      Object.entries(clean.properties).map(([key, value]) => [key, sanitizeAiSdkSchemaNode(value)])
     );
   }
   if (clean.items !== undefined) {
@@ -1695,7 +2124,9 @@ function normalizeModelChatMessages(messages) {
     .filter((message) => message?.role === 'user' || message?.role === 'assistant')
     .map((message) => ({
       role: message.role,
-      content: String(message.content ?? '').slice(0, 20000).trim(),
+      content: String(message.content ?? '')
+        .slice(0, 20000)
+        .trim(),
     }))
     .filter((message) => message.content.length > 0);
 }
@@ -2114,6 +2545,35 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
   // and clientInformation).
   /** @type {Map<string, { serverUrl: string, oauthState: any, allowPrivateNetwork: boolean }>} */
   const pendingOAuthFlows = new Map();
+
+  function formatInspectorToolError(error) {
+    const oauthState = [...oauthProviders.entries()].find(
+      ([url, state]) => url === _serverUrl || state.provider === _connectionOpts.authProvider
+    )?.[1];
+    const authorizationServers = oauthState?.getAuthorizationServers() ?? [];
+    const pendingOAuth = oauthState?.getAuthUrl() || authorizationServers.length > 1;
+    return {
+      content: [
+        {
+          type: 'text',
+          text: pendingOAuth
+            ? 'Additional authorization is required. Click Authorize to continue.'
+            : `Error: ${error.message}`,
+        },
+      ],
+      isError: true,
+      ...(pendingOAuth
+        ? {
+            _meta: {
+              _sunpeak: {
+                oauthRequired: true,
+                ...(authorizationServers.length > 1 ? { authorizationServers } : {}),
+              },
+            },
+          }
+        : {}),
+    };
+  }
   /**
    * Reject browser requests that are not same-origin with the inspector.
    * This blocks CSRF, cross-site image/script GETs, and DNS rebinding attacks
@@ -2237,12 +2697,7 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
             }
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(
-            JSON.stringify({
-              content: [{ type: 'text', text: `Error: ${err.message}` }],
-              isError: true,
-            })
-          );
+          res.end(JSON.stringify(formatInspectorToolError(err)));
         }
       });
 
@@ -2285,12 +2740,7 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
             res.end(JSON.stringify(result));
           } catch (err) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(
-              JSON.stringify({
-                content: [{ type: 'text', text: `Error: ${err.message}` }],
-                isError: true,
-              })
-            );
+            res.end(JSON.stringify(formatInspectorToolError(err)));
           }
           return;
         }
@@ -2318,12 +2768,7 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
           res.end(JSON.stringify(result));
         } catch (err) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(
-            JSON.stringify({
-              content: [{ type: 'text', text: `Error: ${err.message}` }],
-              isError: true,
-            })
-          );
+          res.end(JSON.stringify(formatInspectorToolError(err)));
         }
       });
 
@@ -2363,12 +2808,7 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
           res.end(JSON.stringify(result));
         } catch (err) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(
-            JSON.stringify({
-              content: [{ type: 'text', text: `Error: ${err.message}` }],
-              isError: true,
-            })
-          );
+          res.end(JSON.stringify(formatInspectorToolError(err)));
         }
       });
 
@@ -2477,6 +2917,44 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
 
       // ── OAuth flow endpoints ──
 
+      server.middlewares.use('/__sunpeak/oauth/reset', async (req, res) => {
+        if (!requireSameOrigin(req, res)) return;
+        if (req.method !== 'POST') {
+          res.writeHead(405);
+          res.end('Method not allowed');
+          return;
+        }
+        let parsed;
+        try {
+          parsed = JSON.parse(await readRequestBody(req, { maxBytes: MODEL_KEY_BODY_LIMIT_BYTES }));
+        } catch (err) {
+          res.writeHead(err instanceof SyntaxError ? 400 : 413, {
+            'Content-Type': 'application/json',
+          });
+          res.end(JSON.stringify({ error: err.message }));
+          return;
+        }
+        const serverUrl = parsed?.url;
+        if (!serverUrl) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing url' }));
+          return;
+        }
+        const oauthState = oauthProviders.get(serverUrl);
+        await oauthState?.provider.invalidateCredentials?.('all');
+        oauthProviders.delete(serverUrl);
+        for (const [key, value] of pendingOAuthFlows) {
+          if (value.serverUrl === serverUrl) pendingOAuthFlows.delete(key);
+        }
+        if (_connectionOpts.authProvider === oauthState?.provider) {
+          _connectionOpts = {
+            enforcePublicHttpUrl: _connectionOpts.enforcePublicHttpUrl,
+          };
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'cleared' }));
+      });
+
       // Start OAuth: discover metadata, register client, return authorization URL
       server.middlewares.use('/__sunpeak/oauth/start', async (req, res) => {
         if (!requireSameOrigin(req, res)) return;
@@ -2503,10 +2981,26 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
           return;
         }
 
-        const { url: serverUrl, scope, clientId, clientSecret } = parsed;
+        const {
+          url: serverUrl,
+          scope,
+          clientId,
+          clientSecret,
+          clientMetadataUrl,
+          tokenEndpointAuthMethod,
+          authorizationServer,
+        } = parsed;
         if (!serverUrl) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Missing url' }));
+          return;
+        }
+        if (
+          tokenEndpointAuthMethod &&
+          !['client_secret_basic', 'client_secret_post', 'none'].includes(tokenEndpointAuthMethod)
+        ) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unsupported OAuth token endpoint auth method' }));
           return;
         }
         // Only http(s) URLs are accepted. Without this check a stdio-like
@@ -2540,7 +3034,40 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
           // Check if we already have a working provider with tokens for this server.
           // If so, try to connect directly before creating a fresh provider.
           const existingState = oauthProviders.get(serverUrl);
-          if (existingState?.hasTokens()) {
+          const providerConfiguration = {
+            clientId,
+            clientSecret,
+            clientMetadataUrl,
+            tokenEndpointAuthMethod,
+            scope,
+          };
+          const existingMatchesConfiguration =
+            existingState?.matchesConfiguration(providerConfiguration) ?? false;
+          const existingMatchesIssuer =
+            !authorizationServer || existingState?.getActiveIssuer() === authorizationServer;
+          const pendingAuthUrl =
+            existingMatchesIssuer && existingMatchesConfiguration
+              ? existingState?.getAuthUrl()
+              : undefined;
+          if (pendingAuthUrl) {
+            if (pendingAuthUrl.protocol !== 'http:' && pendingAuthUrl.protocol !== 'https:') {
+              throw new Error(
+                `OAuth authorization URL has unsupported scheme: ${pendingAuthUrl.protocol}`
+              );
+            }
+            for (const [key, val] of pendingOAuthFlows) {
+              if (val.serverUrl === serverUrl) pendingOAuthFlows.delete(key);
+            }
+            pendingOAuthFlows.set(existingState.stateParam, {
+              serverUrl,
+              oauthState: existingState,
+              allowPrivateNetwork,
+            });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: 'redirect', authUrl: pendingAuthUrl.toString() }));
+            return;
+          }
+          if (existingMatchesIssuer && existingMatchesConfiguration && existingState?.hasTokens()) {
             try {
               // Close old connection (best effort)
               try {
@@ -2573,28 +3100,89 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
             }
           }
 
-          // Always create a fresh provider for an explicit Authorize click.
-          // This ensures the user's current credentials (or lack thereof) are
-          // used, not stale ones from a previous attempt.
-          const resourceMetadataUrl = await resolveMcpResourceMetadataUrl(serverUrl);
-          const oauthState = createInMemoryOAuthProvider(callbackUrl, { clientId, clientSecret });
+          const canReuseForIssuerSelection =
+            authorizationServer &&
+            existingState?.getAuthorizationServers().includes(authorizationServer) &&
+            existingState.matchesConfiguration(providerConfiguration);
+          const oauthState = canReuseForIssuerSelection
+            ? existingState
+            : createInMemoryOAuthProvider(callbackUrl, {
+                ...providerConfiguration,
+                authorizationServer,
+              });
+          if (canReuseForIssuerSelection) {
+            await configureOAuthAuthorizationServer(
+              oauthState,
+              authorizationServer,
+              allowPrivateNetwork ? fetch : createPublicOAuthFetch()
+            );
+          }
           oauthProviders.set(serverUrl, oauthState);
 
-          // Run the SDK auth flow — will call redirectToAuthorization() if needed
-          const { auth } = await import('@modelcontextprotocol/sdk/client/auth.js');
-          const result = await auth(oauthState.provider, {
-            serverUrl,
-            scope,
-            ...(resourceMetadataUrl ? { resourceMetadataUrl: new URL(resourceMetadataUrl) } : {}),
-          });
-
-          if (result === 'REDIRECT') {
-            const authUrl = oauthState.getAuthUrl();
-            if (!authUrl) {
-              throw new Error(
-                'OAuth flow requested redirect but no authorization URL was generated'
+          // Let the MCP transport see the server's real WWW-Authenticate response.
+          // This preserves its resource_metadata and scope values, which take
+          // priority over discovery defaults and the user-configured fallback.
+          let newConnection;
+          try {
+            newConnection = await createMcpConnection(serverUrl, {
+              type: 'oauth',
+              authProvider: oauthState.provider,
+              enforcePublicHttpUrl: !allowPrivateNetwork,
+            });
+          } catch (connectionError) {
+            const authorizationServers = oauthState.getAuthorizationServers();
+            if (authorizationServers.length > 1 && !authorizationServer) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({
+                  status: 'authorization_server_required',
+                  authorizationServers,
+                })
               );
+              return;
             }
+            if (
+              authorizationServer &&
+              authorizationServers.includes(authorizationServer) &&
+              !oauthState.getDiscoveryState()
+            ) {
+              await configureOAuthAuthorizationServer(
+                oauthState,
+                authorizationServer,
+                allowPrivateNetwork ? fetch : createPublicOAuthFetch()
+              );
+              try {
+                newConnection = await createMcpConnection(serverUrl, {
+                  type: 'oauth',
+                  authProvider: oauthState.provider,
+                  enforcePublicHttpUrl: !allowPrivateNetwork,
+                });
+              } catch {
+                if (!oauthState.getAuthUrl()) throw connectionError;
+              }
+            }
+            if (!newConnection && !oauthState.getAuthUrl()) {
+              // Some servers return a successful non-metadata page at the
+              // endpoint-specific well-known path. Keep the root fallback for
+              // that compatibility case when no challenge URL was captured.
+              const resourceMetadataUrl = await resolveMcpResourceMetadataUrl(serverUrl);
+              const { auth } = await import('@modelcontextprotocol/sdk/client/auth.js');
+              await auth(oauthState.provider, {
+                serverUrl,
+                scope,
+                ...(resourceMetadataUrl
+                  ? { resourceMetadataUrl: new URL(resourceMetadataUrl) }
+                  : {}),
+                fetchFn: createOAuthProviderAwareFetch(
+                  oauthState.provider,
+                  allowPrivateNetwork ? fetch : createPublicOAuthFetch()
+                ),
+              });
+            }
+          }
+
+          const authUrl = oauthState.getAuthUrl();
+          if (authUrl) {
             // Reject non-http(s) authorization URLs. A malicious MCP server can
             // publish OAuth metadata whose `authorization_endpoint` is a
             // `javascript:` URL; if we forwarded that to the client, the popup
@@ -2621,18 +3209,14 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
             });
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ status: 'redirect', authUrl: authUrl.toString() }));
-          } else {
-            // AUTHORIZED — tokens were already available (shouldn't normally happen on first call)
+          } else if (newConnection) {
+            // The transport either completed a non-interactive grant or the
+            // resource did not require authorization.
             try {
               await getClient().close();
             } catch {
               /* ignore */
             }
-            const newConnection = await createMcpConnection(serverUrl, {
-              type: 'oauth',
-              authProvider: oauthState.provider,
-              enforcePublicHttpUrl: !allowPrivateNetwork,
-            });
             setClient(newConnection.client);
             _serverUrl = newConnection.serverUrl || serverUrl;
             _liveServerUrl = '';
@@ -2646,6 +3230,8 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
               mergeSimulationFixtures(pluginOpts.simulationsDir, simulations);
             }
             sendTokenedSimulations(res, { status: 'authorized', simulations });
+          } else {
+            throw new Error('OAuth flow did not produce an authorization redirect or connection');
           }
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -2662,6 +3248,8 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
         const state = reqUrl.searchParams.get('state');
         const error = reqUrl.searchParams.get('error');
         const errorDescription = reqUrl.searchParams.get('error_description');
+        const errorUri = reqUrl.searchParams.get('error_uri');
+        const issuer = reqUrl.searchParams.get('iss');
 
         // Escape values for safe embedding in <script> — JSON.stringify alone
         // doesn't escape "</script>" sequences which would break out of the tag.
@@ -2676,6 +3264,8 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
   var state = ${safeJson(state)};
   var error = ${safeJson(error)};
   var errorDescription = ${safeJson(errorDescription)};
+  var errorUri = ${safeJson(errorUri)};
+  var issuer = ${safeJson(issuer)};
 
   // Use our own origin as the postMessage targetOrigin to prevent leaking data cross-origin.
   var origin = location.origin;
@@ -2693,40 +3283,40 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
     }
   }
 
-  if (error) {
-    notify({ type: 'sunpeak-oauth-callback', error: error, errorDescription: errorDescription });
-    document.body.textContent = 'Authorization failed: ' + (errorDescription || error);
-    setTimeout(function() { window.close(); }, 2000);
-    return;
-  }
-
-  if (!code) {
-    document.body.textContent = 'No authorization code received.';
-    return;
-  }
-
-  document.body.textContent = 'Completing authorization...';
+  document.body.textContent = 'Validating authorization response...';
 
   // Post the code + state to the server to exchange for tokens.
   // The state is validated server-side to prevent CSRF.
   fetch('/__sunpeak/oauth/complete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: code, state: state })
+    body: JSON.stringify({
+      code: code,
+      state: state,
+      error: error,
+      errorDescription: errorDescription,
+      errorUri: errorUri,
+      issuer: issuer
+    })
   })
   .then(function(res) { return res.json(); })
   .then(function(data) {
     if (data.error) {
-      notify({ type: 'sunpeak-oauth-callback', error: data.error });
+      notify({ type: 'sunpeak-oauth-callback', state: state, error: data.error });
       document.body.textContent = 'Authorization failed: ' + data.error;
     } else {
-      notify({ type: 'sunpeak-oauth-callback', success: true, simulations: data.simulations });
+      notify({
+        type: 'sunpeak-oauth-callback',
+        state: state,
+        success: true,
+        simulations: data.simulations
+      });
       document.body.textContent = 'Authorized! You can close this window.';
     }
     setTimeout(function() { window.close(); }, 1000);
   })
   .catch(function(err) {
-    notify({ type: 'sunpeak-oauth-callback', error: err.message });
+    notify({ type: 'sunpeak-oauth-callback', state: state, error: err.message });
     document.body.textContent = 'Error: ' + err.message;
   });
 })();
@@ -2763,12 +3353,7 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
           return;
         }
 
-        const { code, state } = parsed;
-        if (!code) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Missing authorization code' }));
-          return;
-        }
+        const { code, state, error, errorDescription, errorUri, issuer } = parsed;
         if (!state) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Missing state parameter' }));
@@ -2792,12 +3377,36 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
 
         const { serverUrl, oauthState, allowPrivateNetwork } = pending;
 
+        let validatedCode;
+        try {
+          validatedCode = validateOAuthAuthorizationResponse(
+            {
+              code,
+              state,
+              error,
+              error_description: errorDescription,
+              error_uri: errorUri,
+              iss: issuer,
+            },
+            oauthState.stateParam,
+            oauthState.getDiscoveryState()
+          );
+        } catch (err) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+          return;
+        }
+
         try {
           // Exchange the code for tokens
           const { auth } = await import('@modelcontextprotocol/sdk/client/auth.js');
           const result = await auth(oauthState.provider, {
             serverUrl,
-            authorizationCode: code,
+            authorizationCode: validatedCode,
+            fetchFn: createOAuthProviderAwareFetch(
+              oauthState.provider,
+              allowPrivateNetwork ? fetch : createPublicOAuthFetch()
+            ),
           });
 
           if (result !== 'AUTHORIZED') {
@@ -3104,6 +3713,12 @@ export const _securityTestExports = {
   readRequestBody,
   resolveHttpRedirectsForMcp,
   shouldAllowPrivateServerUrls,
+  createInMemoryOAuthProvider,
+  createOAuthAwareFetch,
+  createPublicOAuthFetch,
+  configureOAuthAuthorizationServer,
+  validateOAuthDiscoveryState,
+  validateOAuthAuthorizationResponse,
   tryAnonymousOAuth,
   requestOriginForSameOriginCheck,
   isSameInspectorOrigin,

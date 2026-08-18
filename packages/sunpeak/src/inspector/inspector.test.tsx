@@ -391,11 +391,25 @@ describe('Inspector', () => {
   });
 
   describe('Authentication', () => {
-    it('shows Authentication section when not in demo mode', () => {
+    const openAuthentication = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole('button', { name: /^Authentication/ }));
+      return screen.getByText('Authentication').closest('[class*="space-y"]')!;
+    };
+
+    const openOAuthSettings = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole('button', { name: /^OAuth settings/ }));
+    };
+
+    it('shows Authentication collapsed with a status summary when not in demo mode', async () => {
+      const user = userEvent.setup();
       render(<Inspector simulations={{ test: createSim() }} onCallTool={vi.fn()} />);
 
       expect(screen.getByText('Authentication')).toBeInTheDocument();
-      const authSection = screen.getByText('Authentication').closest('[class*="space-y"]')!;
+      expect(screen.getByRole('button', { name: /^Authentication None/ })).toBeInTheDocument();
+      expect(
+        screen.getByText('Authentication').closest('[class*="space-y"]')!.querySelector('select')
+      ).toBeNull();
+      const authSection = await openAuthentication(user);
       expect(authSection.querySelector('select')).toHaveDisplayValue('None');
     });
 
@@ -406,10 +420,10 @@ describe('Inspector', () => {
     });
 
     it('shows auth type selector with None, Bearer Token, and OAuth options', async () => {
+      const user = userEvent.setup();
       render(<Inspector simulations={{ test: createSim() }} onCallTool={vi.fn()} />);
 
-      // Find the select inside the Authentication section
-      const authSection = screen.getByText('Authentication').closest('[class*="space-y"]')!;
+      const authSection = await openAuthentication(user);
       const authSelect = authSection.querySelector('select')!;
       const options = Array.from(authSelect.options).map((o) => o.textContent);
       expect(options).toContain('None');
@@ -421,8 +435,7 @@ describe('Inspector', () => {
       const user = userEvent.setup();
       render(<Inspector simulations={{ test: createSim() }} onCallTool={vi.fn()} />);
 
-      // Select Bearer Token — find the select inside the Authentication section
-      const authSection = screen.getByText('Authentication').closest('[class*="space-y"]')!;
+      const authSection = await openAuthentication(user);
       const authSelect = authSection.querySelector('select')!;
       await user.selectOptions(authSelect, 'bearer');
 
@@ -431,16 +444,237 @@ describe('Inspector', () => {
       expect(tokenInput).toHaveAttribute('type', 'password');
     });
 
-    it('shows Authorize button and Scopes input when OAuth is selected', async () => {
+    it('shows generic OAuth registration inputs when OAuth is selected', async () => {
       const user = userEvent.setup();
       render(<Inspector simulations={{ test: createSim() }} onCallTool={vi.fn()} />);
 
-      const authSection = screen.getByText('Authentication').closest('[class*="space-y"]')!;
+      const authSection = await openAuthentication(user);
       const authSelect = authSection.querySelector('select')!;
       await user.selectOptions(authSelect, 'oauth');
 
       expect(screen.getByRole('button', { name: 'Authorize' })).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('Scopes (optional)')).not.toBeInTheDocument();
+      await openOAuthSettings(user);
       expect(screen.getByPlaceholderText('Scopes (optional)')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Client ID (optional)')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Client metadata URL (optional)')).toBeInTheDocument();
+    });
+
+    it('expands Authentication when a tool requests OAuth', async () => {
+      const user = userEvent.setup();
+      const onCallTool = vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: 'Authorization required' }],
+        _meta: { _sunpeak: { oauthRequired: true } },
+      });
+      render(<Inspector simulations={{ test: createSim() }} onCallTool={onCallTool} />);
+
+      expect(
+        screen.getByText('Authentication').closest('[class*="space-y"]')!.querySelector('select')
+      ).toBeNull();
+      await user.click(screen.getByRole('button', { name: /run/i }));
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('OAuth')).toBeInTheDocument();
+        expect(screen.getByText(/Additional authorization is required/)).toBeInTheDocument();
+      });
+    });
+
+    it('sends a URL-based OAuth client ID when provided', async () => {
+      const user = userEvent.setup();
+      const popup = { close: vi.fn(), closed: false, location: { href: '' } };
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+
+      fetchSpy
+        .mockResolvedValueOnce(new Response('{"tools":[]}', { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ hasKey: false }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: 'Stopped for test' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+
+      render(
+        <Inspector
+          simulations={{ test: createSim() }}
+          mcpServerUrl="http://localhost:8000/mcp"
+          onCallTool={vi.fn()}
+        />
+      );
+
+      const authSection = await openAuthentication(user);
+      await user.selectOptions(authSection.querySelector('select')!, 'oauth');
+      await openOAuthSettings(user);
+      await user.type(
+        screen.getByPlaceholderText('Client metadata URL (optional)'),
+        'https://client.example.com/oauth/metadata.json'
+      );
+      await user.tab();
+      await user.click(screen.getByRole('button', { name: 'Authorize' }));
+
+      await waitFor(() => {
+        const startCall = fetchSpy.mock.calls.find((call: unknown[]) =>
+          String(call[0]).includes('/__sunpeak/oauth/start')
+        );
+        expect(startCall).toBeDefined();
+        expect(JSON.parse(String(startCall?.[1]?.body))).toMatchObject({
+          clientMetadataUrl: 'https://client.example.com/oauth/metadata.json',
+        });
+      });
+      openSpy.mockRestore();
+    });
+
+    it('sends the selected confidential-client authentication method', async () => {
+      const user = userEvent.setup();
+      const popup = { close: vi.fn(), closed: false, location: { href: '' } };
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+      fetchSpy
+        .mockResolvedValueOnce(new Response('{"tools":[]}', { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ hasKey: false }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: 'Stopped for test' }), { status: 400 })
+        );
+
+      render(
+        <Inspector
+          simulations={{ test: createSim() }}
+          mcpServerUrl="http://localhost:8000/mcp"
+          onCallTool={vi.fn()}
+        />
+      );
+      const authSection = await openAuthentication(user);
+      await user.selectOptions(authSection.querySelector('select')!, 'oauth');
+      await openOAuthSettings(user);
+      await user.type(screen.getByPlaceholderText('Client ID (optional)'), 'registered-client');
+      await user.tab();
+      await user.type(screen.getByPlaceholderText('Client Secret (optional)'), 'secret');
+      await user.selectOptions(screen.getByDisplayValue('Client auth: Auto'), 'client_secret_post');
+      await user.click(screen.getByRole('button', { name: 'Authorize' }));
+
+      await waitFor(() => {
+        const startCall = fetchSpy.mock.calls.find((call: unknown[]) =>
+          String(call[0]).includes('/__sunpeak/oauth/start')
+        );
+        expect(JSON.parse(String(startCall?.[1]?.body))).toMatchObject({
+          clientId: 'registered-client',
+          clientSecret: 'secret',
+          tokenEndpointAuthMethod: 'client_secret_post',
+        });
+      });
+      openSpy.mockRestore();
+    });
+
+    it('prompts for an authorization server when the resource advertises several', async () => {
+      const user = userEvent.setup();
+      const popup = { close: vi.fn(), closed: false, location: { href: '' } };
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+      fetchSpy
+        .mockResolvedValueOnce(new Response('{"tools":[]}', { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ hasKey: false }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              status: 'authorization_server_required',
+              authorizationServers: [
+                'https://auth-one.example.com',
+                'https://auth-two.example.com',
+              ],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: 'Stopped for test' }), { status: 400 })
+        );
+
+      render(
+        <Inspector
+          simulations={{ test: createSim() }}
+          mcpServerUrl="http://localhost:8000/mcp"
+          onCallTool={vi.fn()}
+        />
+      );
+      const authSection = await openAuthentication(user);
+      await user.selectOptions(authSection.querySelector('select')!, 'oauth');
+      await user.click(screen.getByRole('button', { name: 'Authorize' }));
+
+      const issuerSelect = await screen.findByDisplayValue('https://auth-one.example.com');
+      await user.selectOptions(issuerSelect, 'https://auth-two.example.com');
+      await user.click(screen.getByRole('button', { name: 'Authorize' }));
+
+      await waitFor(() => {
+        const startCalls = fetchSpy.mock.calls.filter((call: unknown[]) =>
+          String(call[0]).includes('/__sunpeak/oauth/start')
+        );
+        expect(startCalls).toHaveLength(2);
+        expect(JSON.parse(String(startCalls[1][1]?.body))).toMatchObject({
+          authorizationServer: 'https://auth-two.example.com',
+        });
+      });
+      openSpy.mockRestore();
+    });
+
+    it('clears cached OAuth authorization from the inspector', async () => {
+      const user = userEvent.setup();
+      const popup = { close: vi.fn(), closed: false, location: { href: '' } };
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+      fetchSpy
+        .mockResolvedValueOnce(new Response('{"tools":[]}', { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ hasKey: false }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ status: 'authorized', simulations: {} }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ status: 'cleared' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+
+      render(
+        <Inspector
+          simulations={{ test: createSim() }}
+          mcpServerUrl="http://localhost:8000/mcp"
+          onCallTool={vi.fn()}
+        />
+      );
+      const authSection = await openAuthentication(user);
+      await user.selectOptions(authSection.querySelector('select')!, 'oauth');
+      await user.click(screen.getByRole('button', { name: 'Authorize' }));
+      await user.click(await screen.findByRole('button', { name: 'Clear local authorization' }));
+
+      await waitFor(() => {
+        expect(
+          fetchSpy.mock.calls.some((call: unknown[]) =>
+            String(call[0]).includes('/__sunpeak/oauth/reset')
+          )
+        ).toBe(true);
+        expect(screen.getByRole('button', { name: 'Authorize' })).toBeInTheDocument();
+      });
+      openSpy.mockRestore();
     });
 
     it('surfaces a clear error when OAuth start returns non-JSON', async () => {
@@ -471,7 +705,7 @@ describe('Inspector', () => {
         />
       );
 
-      const authSection = screen.getByText('Authentication').closest('[class*="space-y"]')!;
+      const authSection = await openAuthentication(user);
       const authSelect = authSection.querySelector('select')!;
       await user.selectOptions(authSelect, 'oauth');
       await user.click(screen.getByRole('button', { name: 'Authorize' }));
@@ -512,7 +746,7 @@ describe('Inspector', () => {
         />
       );
 
-      const authSection = screen.getByText('Authentication').closest('[class*="space-y"]')!;
+      const authSection = await openAuthentication(user);
       const authSelect = authSection.querySelector('select')!;
       await user.selectOptions(authSelect, 'oauth');
       await user.click(screen.getByRole('button', { name: 'Authorize' }));
@@ -549,7 +783,7 @@ describe('Inspector', () => {
           new Response(
             JSON.stringify({
               status: 'redirect',
-              authUrl: 'https://auth.example.test/authorize',
+              authUrl: 'https://auth.example.test/authorize?state=state-123',
             }),
             {
               status: 200,
@@ -566,18 +800,118 @@ describe('Inspector', () => {
         />
       );
 
-      const authSection = screen.getByText('Authentication').closest('[class*="space-y"]')!;
+      const authSection = await openAuthentication(user);
       const authSelect = authSection.querySelector('select')!;
       await user.selectOptions(authSelect, 'oauth');
       await user.click(screen.getByRole('button', { name: 'Authorize' }));
 
       await waitFor(() => {
-        expect(popup.location.href).toBe('https://auth.example.test/authorize');
+        expect(popup.location.href).toBe('https://auth.example.test/authorize?state=state-123');
       });
       expect(popup.opener).toBeNull();
 
       unmount();
       openSpy.mockRestore();
+    });
+
+    it('ignores OAuth callback notifications from another flow', async () => {
+      const user = userEvent.setup();
+      const popup = {
+        close: vi.fn(),
+        closed: false,
+        location: { href: '' },
+        opener: window,
+      };
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+      fetchSpy
+        .mockResolvedValueOnce(new Response('{"tools":[]}', { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ hasKey: false }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              status: 'redirect',
+              authUrl: 'https://auth.example.test/authorize?state=expected-state',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        );
+
+      const { unmount } = render(
+        <Inspector
+          simulations={{ test: createSim() }}
+          mcpServerUrl="http://localhost:8000/mcp"
+          onCallTool={vi.fn()}
+        />
+      );
+      const authSection = await openAuthentication(user);
+      await user.selectOptions(authSection.querySelector('select')!, 'oauth');
+      await user.click(screen.getByRole('button', { name: 'Authorize' }));
+      await waitFor(() => expect(popup.location.href).toContain('state=expected-state'));
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: window.location.origin,
+          source: popup as unknown as WindowProxy,
+          data: { type: 'sunpeak-oauth-callback', state: 'other-state', success: true },
+        })
+      );
+      expect(
+        screen.getByRole('button', { name: /Authentication OAuth · Authorizing/ })
+      ).toBeInTheDocument();
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: window.location.origin,
+          source: popup as unknown as WindowProxy,
+          data: { type: 'sunpeak-oauth-callback', state: 'expected-state', success: true },
+        })
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Authentication OAuth · Authorized/ })
+        ).toBeInTheDocument()
+      );
+
+      unmount();
+      openSpy.mockRestore();
+    });
+
+    it('clears authorization-server choices when the MCP server URL changes', async () => {
+      const user = userEvent.setup();
+      const onCallTool = vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: 'Authorization required' }],
+        _meta: {
+          _sunpeak: {
+            oauthRequired: true,
+            authorizationServers: ['https://auth-one.example.com', 'https://auth-two.example.com'],
+          },
+        },
+      });
+      fetchSpy.mockResolvedValue(new Response('{"tools":[]}', { status: 200 }));
+
+      render(
+        <Inspector
+          simulations={{ test: createSim() }}
+          mcpServerUrl="http://localhost:8000/mcp"
+          onCallTool={onCallTool}
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /run/i }));
+      expect(await screen.findByDisplayValue('https://auth-one.example.com')).toBeInTheDocument();
+
+      const serverInput = screen.getByDisplayValue('http://localhost:8000/mcp');
+      await user.clear(serverInput);
+      await user.type(serverInput, 'http://localhost:9000/mcp');
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.queryByDisplayValue('https://auth-one.example.com')).not.toBeInTheDocument();
+      });
     });
 
     it('reconnects with bearer token when token is entered', async () => {
@@ -600,7 +934,7 @@ describe('Inspector', () => {
       });
 
       // Select Bearer Token
-      const authSection = screen.getByText('Authentication').closest('[class*="space-y"]')!;
+      const authSection = await openAuthentication(user);
       const authSelect = authSection.querySelector('select')!;
       await user.selectOptions(authSelect, 'bearer');
 

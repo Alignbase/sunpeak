@@ -182,6 +182,7 @@ export async function start(projectRoot = process.cwd(), args = []) {
 
   const serverEntryPath = join(distDir, 'server.js');
   let auth = undefined;
+  let oauth = undefined;
   let serverConfig = {};
 
   if (existsSync(serverEntryPath)) {
@@ -190,6 +191,10 @@ export async function start(projectRoot = process.cwd(), args = []) {
       if (typeof serverEntry.auth === 'function') {
         auth = serverEntry.auth;
         console.log('Loaded auth from server entry');
+      }
+      if (serverEntry.oauth && typeof serverEntry.oauth === 'object') {
+        oauth = serverEntry.oauth;
+        console.log('Loaded OAuth metadata from server entry');
       }
       if (serverEntry.server) {
         serverConfig = serverEntry.server;
@@ -221,6 +226,7 @@ export async function start(projectRoot = process.cwd(), args = []) {
       tools,
       resources,
       auth,
+      oauth,
       stateless,
       ...(sse ? { enableJsonResponse: false } : {}),
       ...(sseKeepAliveMs !== undefined ? { sseKeepAliveMs } : {}),

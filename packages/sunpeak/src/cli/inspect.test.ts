@@ -589,6 +589,41 @@ describe('inspect endpoint security helpers', () => {
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
+  it('blocks private OAuth discovery URLs before fetching them', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const fetchFn = vi.fn();
+    const guardedFetch = _securityTestExports.createPublicOAuthFetch(fetchFn);
+
+    await expect(guardedFetch('http://169.254.169.254/latest/meta-data')).rejects.toThrow(
+      'Private-network MCP server URLs are blocked'
+    );
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('validates OAuth discovery redirects and strips credentials across origins', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { Location: 'https://93.184.216.35/oauth/metadata' },
+        })
+      )
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    const guardedFetch = _securityTestExports.createPublicOAuthFetch(fetchFn);
+
+    await expect(
+      guardedFetch('https://93.184.216.34/.well-known/oauth-authorization-server', {
+        headers: { Authorization: 'Bearer secret', Cookie: 'session=secret' },
+      })
+    ).resolves.toHaveProperty('status', 200);
+
+    const redirectedInit = fetchFn.mock.calls[1][1];
+    expect(redirectedInit.headers.get('authorization')).toBeNull();
+    expect(redirectedInit.headers.get('cookie')).toBeNull();
+  });
+
   it('passes configured headers to MCP redirect probes', async () => {
     const { _securityTestExports } = await importInspectCommand();
     const fetchFn = vi.fn(async () => new Response(null, { status: 200 }));
@@ -648,6 +683,30 @@ describe('inspect endpoint security helpers', () => {
     ).rejects.toThrow('OAuth state mismatch');
   });
 
+  it('does not treat a sibling callback path as the OAuth callback', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: {
+            Location: 'http://localhost:24681/oauth/callback-attacker?code=stolen&state=state-123',
+          },
+        })
+      )
+      .mockResolvedValueOnce(new Response('<form>Login</form>', { status: 200 }));
+
+    await expect(
+      _securityTestExports.tryAnonymousOAuth(
+        'https://auth.example.com/authorize',
+        'http://localhost:24681/oauth/callback',
+        'state-123',
+        fetchFn
+      )
+    ).resolves.toBeNull();
+  });
+
   it('rejects anonymous OAuth redirects to non-http schemes', async () => {
     const { _securityTestExports } = await importInspectCommand();
     const fetchFn = vi.fn(async () => {
@@ -665,6 +724,374 @@ describe('inspect endpoint security helpers', () => {
         fetchFn
       )
     ).rejects.toThrow('unsupported scheme');
+  });
+
+  it('builds native OAuth client metadata and supports URL-based client IDs', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const oauthState = _securityTestExports.createInMemoryOAuthProvider(
+      'http://localhost:24681/oauth/callback',
+      { clientMetadataUrl: 'https://client.example.com/oauth/metadata.json' }
+    );
+
+    expect(oauthState.provider.clientMetadataUrl).toBe(
+      'https://client.example.com/oauth/metadata.json'
+    );
+    expect(oauthState.provider.clientMetadata).toMatchObject({
+      application_type: 'native',
+      token_endpoint_auth_method: 'none',
+      grant_types: ['authorization_code', 'refresh_token'],
+    });
+    const firstState = oauthState.stateParam;
+    await oauthState.provider.state?.();
+    expect(oauthState.stateParam).not.toBe(firstState);
+  });
+
+  it('does not reuse pending OAuth state after client settings change', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const oauthState = _securityTestExports.createInMemoryOAuthProvider(
+      'http://localhost:24681/oauth/callback',
+      {
+        clientId: 'registered-client',
+        clientSecret: 'first-secret',
+        scope: 'profile:read',
+      }
+    );
+
+    expect(
+      oauthState.matchesConfiguration({
+        clientId: 'registered-client',
+        clientSecret: 'first-secret',
+        scope: 'profile:read',
+      })
+    ).toBe(true);
+    expect(
+      oauthState.matchesConfiguration({
+        clientId: 'registered-client',
+        clientSecret: 'replacement-secret',
+        scope: 'profile:read',
+      })
+    ).toBe(false);
+    expect(
+      oauthState.matchesConfiguration({
+        clientId: 'registered-client',
+        clientSecret: 'first-secret',
+        scope: 'profile:read files:write',
+      })
+    ).toBe(false);
+  });
+
+  it('clears cached OAuth tokens and discovery state when invalidated', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const oauthState = _securityTestExports.createInMemoryOAuthProvider(
+      'http://localhost:24681/oauth/callback'
+    );
+    oauthState.provider.saveTokens({ access_token: 'token', token_type: 'Bearer' });
+    oauthState.provider.saveDiscoveryState({
+      authorizationServerUrl: 'https://auth.example.com',
+      authorizationServerMetadata: {
+        issuer: 'https://auth.example.com',
+        authorization_endpoint: 'https://auth.example.com/authorize',
+        token_endpoint: 'https://auth.example.com/token',
+        response_types_supported: ['code'],
+        code_challenge_methods_supported: ['S256'],
+      },
+    });
+    oauthState.provider.redirectToAuthorization(new URL('https://auth.example.com/authorize'));
+
+    expect(oauthState.hasTokens()).toBe(true);
+    expect(oauthState.getAuthUrl()?.hostname).toBe('auth.example.com');
+    oauthState.provider.saveTokens({ access_token: 'replacement', token_type: 'Bearer' });
+    expect(oauthState.getAuthUrl()).toBeUndefined();
+    await oauthState.provider.invalidateCredentials('all');
+    expect(oauthState.hasTokens()).toBe(false);
+    expect(oauthState.getDiscoveryState()).toBeUndefined();
+  });
+
+  it('validates RFC 9207 authorization response issuers before returning errors', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const discoveryState = {
+      authorizationServerUrl: 'https://auth.example.com',
+      authorizationServerMetadata: {
+        issuer: 'https://auth.example.com',
+        authorization_response_iss_parameter_supported: true,
+      },
+    };
+
+    expect(() =>
+      _securityTestExports.validateOAuthAuthorizationResponse(
+        new URLSearchParams({ code: 'ok', state: 'state-123' }),
+        'state-123',
+        discoveryState
+      )
+    ).toThrow('missing the required issuer');
+
+    expect(() =>
+      _securityTestExports.validateOAuthAuthorizationResponse(
+        new URLSearchParams({
+          error: 'access_denied',
+          state: 'state-123',
+          iss: 'https://attacker.example.com',
+        }),
+        'state-123',
+        discoveryState
+      )
+    ).toThrow('issuer mismatch');
+
+    expect(
+      _securityTestExports.validateOAuthAuthorizationResponse(
+        new URLSearchParams({
+          code: 'ok',
+          state: 'state-123',
+          iss: 'https://auth.example.com',
+        }),
+        'state-123',
+        discoveryState
+      )
+    ).toBe('ok');
+  });
+
+  it('rejects invalid URL-based OAuth client IDs before discovery', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    expect(() =>
+      _securityTestExports.createInMemoryOAuthProvider('http://localhost:24681/oauth/callback', {
+        clientMetadataUrl: 'http://client.example.com/',
+      })
+    ).toThrow('must use https, have a non-root path');
+    expect(() =>
+      _securityTestExports.createInMemoryOAuthProvider('http://localhost:24681/oauth/callback', {
+        clientMetadataUrl: 'https://user:secret@client.example.com/oauth/metadata.json',
+      })
+    ).toThrow('omit credentials and fragments');
+    expect(() =>
+      _securityTestExports.createInMemoryOAuthProvider('http://localhost:24681/oauth/callback', {
+        clientMetadataUrl: 'https://client.example.com/oauth/metadata.json#fragment',
+      })
+    ).toThrow('omit credentials and fragments');
+  });
+
+  it('rejects mismatched authorization-server issuers and missing PKCE support', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const baseState = {
+      authorizationServerUrl: 'https://auth.example.com',
+      resourceMetadata: {
+        resource: 'https://mcp.example.com/mcp',
+        authorization_servers: ['https://auth.example.com'],
+      },
+      authorizationServerMetadata: {
+        issuer: 'https://other.example.com',
+        authorization_endpoint: 'https://auth.example.com/authorize',
+        token_endpoint: 'https://auth.example.com/token',
+        response_types_supported: ['code'],
+        code_challenge_methods_supported: ['S256'],
+      },
+    };
+
+    expect(() => _securityTestExports.validateOAuthDiscoveryState(baseState)).toThrow(
+      'metadata issuer mismatch'
+    );
+    expect(() =>
+      _securityTestExports.validateOAuthDiscoveryState({
+        ...baseState,
+        authorizationServerMetadata: {
+          ...baseState.authorizationServerMetadata,
+          issuer: 'https://auth.example.com',
+          code_challenge_methods_supported: undefined,
+        },
+      })
+    ).toThrow('advertise PKCE S256 support');
+    expect(() =>
+      _securityTestExports.validateOAuthDiscoveryState({
+        ...baseState,
+        authorizationServerUrl: 'https://user:secret@auth.example.com',
+        authorizationServerMetadata: {
+          ...baseState.authorizationServerMetadata,
+          issuer: 'https://user:secret@auth.example.com',
+        },
+      })
+    ).toThrow('must not contain credentials');
+  });
+
+  it('requires selection for multiple authorization servers and binds credentials to the issuer', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const oauthState = _securityTestExports.createInMemoryOAuthProvider(
+      'http://localhost:24681/oauth/callback',
+      { clientId: 'registered-client', clientSecret: 'secret' }
+    );
+    const state = {
+      authorizationServerUrl: 'https://auth-one.example.com',
+      resourceMetadata: {
+        resource: 'https://mcp.example.com/mcp',
+        authorization_servers: ['https://auth-one.example.com', 'https://auth-two.example.com'],
+      },
+      authorizationServerMetadata: {
+        issuer: 'https://auth-one.example.com',
+        authorization_endpoint: 'https://auth-one.example.com/authorize',
+        token_endpoint: 'https://auth-one.example.com/token',
+        response_types_supported: ['code'],
+        code_challenge_methods_supported: ['S256'],
+      },
+    };
+
+    expect(() => oauthState.provider.saveDiscoveryState(state)).toThrow(
+      'authorization server selection is required'
+    );
+    expect(oauthState.getAuthorizationServers()).toEqual(
+      state.resourceMetadata.authorization_servers
+    );
+
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            issuer: 'https://auth-two.example.com',
+            authorization_endpoint: 'https://auth-two.example.com/authorize',
+            token_endpoint: 'https://auth-two.example.com/token',
+            response_types_supported: ['code'],
+            code_challenge_methods_supported: ['S256'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+    );
+    await _securityTestExports.configureOAuthAuthorizationServer(
+      oauthState,
+      'https://auth-two.example.com',
+      fetchFn
+    );
+    expect(oauthState.getActiveIssuer()).toBe('https://auth-two.example.com');
+    expect(await oauthState.provider.clientInformation()).toMatchObject({
+      client_id: 'registered-client',
+    });
+  });
+
+  it('unions step-up scopes and bypasses refresh until fresh authorization completes', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const oauthState = _securityTestExports.createInMemoryOAuthProvider(
+      'http://localhost:24681/oauth/callback',
+      { scope: 'profile:read', clientId: 'registered-client' }
+    );
+    oauthState.provider.saveDiscoveryState({
+      authorizationServerUrl: 'https://auth.example.com',
+      resourceMetadata: {
+        resource: 'https://mcp.example.com/mcp',
+        authorization_servers: ['https://auth.example.com'],
+      },
+      authorizationServerMetadata: {
+        issuer: 'https://auth.example.com',
+        authorization_endpoint: 'https://auth.example.com/authorize',
+        token_endpoint: 'https://auth.example.com/token',
+        response_types_supported: ['code'],
+        code_challenge_methods_supported: ['S256'],
+      },
+    });
+    oauthState.provider.saveTokens({
+      access_token: 'old-access',
+      refresh_token: 'old-refresh',
+      token_type: 'Bearer',
+      scope: 'profile:read',
+    });
+
+    const oauthFetch = _securityTestExports.createOAuthAwareFetch(
+      oauthState,
+      vi.fn(
+        async () =>
+          new Response('Forbidden', {
+            status: 403,
+            headers: {
+              'WWW-Authenticate':
+                'Bearer error="insufficient_scope", scope="files:write", resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp"',
+            },
+          })
+      )
+    );
+    const response = await oauthFetch('https://mcp.example.com/mcp');
+
+    expect(response.headers.get('www-authenticate')).toContain('scope="profile:read files:write"');
+    expect(oauthState.provider.clientMetadata.scope).toBe('profile:read files:write');
+    expect(await oauthState.provider.tokens()).not.toHaveProperty('refresh_token');
+
+    const oauthRequests: string[] = [];
+    const { auth } = await import('@modelcontextprotocol/sdk/client/auth.js');
+    const result = await auth(oauthState.provider, {
+      serverUrl: 'https://mcp.example.com/mcp',
+      resourceMetadataUrl: new URL(
+        'https://mcp.example.com/.well-known/oauth-protected-resource/mcp'
+      ),
+      scope: 'profile:read files:write',
+      fetchFn: vi.fn(async (input) => {
+        const url = String(input);
+        oauthRequests.push(url);
+        if (url.includes('oauth-protected-resource')) {
+          return new Response(
+            JSON.stringify({
+              resource: 'https://mcp.example.com/mcp',
+              authorization_servers: ['https://auth.example.com'],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            issuer: 'https://auth.example.com',
+            authorization_endpoint: 'https://auth.example.com/authorize',
+            token_endpoint: 'https://auth.example.com/token',
+            response_types_supported: ['code'],
+            code_challenge_methods_supported: ['S256'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }),
+    });
+    expect(result).toBe('REDIRECT');
+    expect(oauthState.getAuthUrl()?.searchParams.get('scope')).toBe('profile:read files:write');
+    expect(oauthRequests).not.toContain('https://auth.example.com/token');
+
+    oauthState.provider.saveTokens({
+      access_token: 'new-access',
+      refresh_token: 'new-refresh',
+      token_type: 'Bearer',
+      scope: 'profile:read files:write',
+    });
+    expect(await oauthState.provider.tokens()).toHaveProperty('refresh_token', 'new-refresh');
+  });
+
+  it('requests offline access only when the selected authorization server supports it', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const createState = (scopesSupported: string[]) => {
+      const oauthState = _securityTestExports.createInMemoryOAuthProvider(
+        'http://localhost:24681/oauth/callback',
+        { scope: 'mcp:basic' }
+      );
+      oauthState.provider.saveDiscoveryState({
+        authorizationServerUrl: 'https://auth.example.com',
+        resourceMetadata: {
+          resource: 'https://mcp.example.com/mcp',
+          authorization_servers: ['https://auth.example.com'],
+        },
+        authorizationServerMetadata: {
+          issuer: 'https://auth.example.com',
+          authorization_endpoint: 'https://auth.example.com/authorize',
+          token_endpoint: 'https://auth.example.com/token',
+          response_types_supported: ['code'],
+          code_challenge_methods_supported: ['S256'],
+          scopes_supported: scopesSupported,
+        },
+      });
+      return oauthState;
+    };
+
+    const supported = createState(['mcp:basic', 'offline_access']);
+    supported.provider.redirectToAuthorization(
+      new URL('https://auth.example.com/authorize?scope=mcp%3Abasic')
+    );
+    expect(supported.provider.clientMetadata.scope).toBe('mcp:basic offline_access');
+    expect(supported.getAuthUrl()?.searchParams.get('scope')).toBe('mcp:basic offline_access');
+
+    const unsupported = createState(['mcp:basic']);
+    unsupported.provider.redirectToAuthorization(
+      new URL('https://auth.example.com/authorize?scope=mcp%3Abasic')
+    );
+    expect(unsupported.provider.clientMetadata.scope).toBe('mcp:basic');
+    expect(unsupported.getAuthUrl()?.searchParams.get('scope')).toBe('mcp:basic');
   });
 
   it('quotes macOS Keychain interactive arguments without allowing command injection', async () => {

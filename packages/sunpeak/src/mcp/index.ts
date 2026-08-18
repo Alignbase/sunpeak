@@ -14,6 +14,9 @@ export {
   startProductionHttpServer,
   setJsonLogging,
   detectClientFromHeaders,
+  createOAuthProtectedResourceMetadata,
+  getOAuthProtectedResourceMetadataUrl,
+  createOAuthChallenge,
 } from './production-server.js';
 export type {
   ProductionTool,
@@ -23,6 +26,11 @@ export type {
   AuthFunction,
   WebAuthFunction,
   WebHandlerConfig,
+  OAuthProtectedResourceConfig,
+  OAuthProtectedResourceMetadata,
+  OAuthChallengeOptions,
+  AuthorizationFailure,
+  AuthorizationContext,
 } from './production-server.js';
 export {
   resolveDomain,

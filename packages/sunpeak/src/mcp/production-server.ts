@@ -105,15 +105,72 @@ export interface ProductionResource {
 }
 
 /**
- * Auth function signature for `src/server.ts` (Node.js).
- * Called on every MCP request. Return AuthInfo to authenticate, null to reject (401).
+ * OAuth 2.0 Protected Resource Metadata served by the MCP resource server.
+ *
+ * `resource` defaults to `serverUrl`. Standard extension fields can be supplied
+ * through `additionalMetadata` without waiting for a sunpeak release.
  */
-export type AuthFunction = (req: IncomingMessage) => Promise<AuthInfo | null> | AuthInfo | null;
+export interface OAuthProtectedResourceConfig {
+  /** Authorization server issuer URLs that can issue tokens for this resource. */
+  authorizationServers: string[];
+  /** Canonical resource identifier. Defaults to `serverUrl`. */
+  resource?: string;
+  /** Scopes understood by this MCP server. */
+  scopesSupported?: string[];
+  /** Human-readable resource name. */
+  resourceName?: string;
+  /** Documentation URL for this resource server. */
+  resourceDocumentation?: string;
+  /** Supported bearer-token presentation methods. Defaults to `['header']`. */
+  bearerMethodsSupported?: string[];
+  /** Additional RFC 9728 or extension metadata fields. */
+  additionalMetadata?: Record<string, unknown>;
+}
+
+/** Standard protected-resource metadata document shape. */
+export interface OAuthProtectedResourceMetadata extends Record<string, unknown> {
+  resource: string;
+  authorization_servers: string[];
+  scopes_supported?: string[];
+  resource_name?: string;
+  resource_documentation?: string;
+  bearer_methods_supported?: string[];
+}
+
+/** Optional details for an OAuth bearer challenge. */
+export interface OAuthChallengeOptions {
+  error?: 'invalid_request' | 'invalid_token' | 'insufficient_scope' | string;
+  errorDescription?: string;
+  scopes?: string[];
+}
+
+/** A structured auth rejection used for invalid tokens and scope upgrades. */
+export interface AuthorizationFailure extends OAuthChallengeOptions {
+  authorized: false;
+  /** Defaults by error: invalid_request=400, insufficient_scope=403, otherwise 401. */
+  status?: 400 | 401 | 403;
+}
+
+/** Parsed request context supplied to auth functions. */
+export interface AuthorizationContext {
+  /** Parsed JSON request body for MCP POST requests. */
+  body?: unknown;
+}
 
 /**
- * Auth function signature for Web Standard handlers (Cloudflare Workers, Deno, Bun).
+ * Auth function signature for `src/server.ts` (Node.js).
+ * Return AuthInfo to authenticate, null for an initial 401, or a structured failure.
  */
-export type WebAuthFunction = (req: Request) => Promise<AuthInfo | null> | AuthInfo | null;
+export type AuthFunction = (
+  req: IncomingMessage,
+  context: AuthorizationContext
+) => Promise<AuthInfo | AuthorizationFailure | null> | AuthInfo | AuthorizationFailure | null;
+
+/** Auth function signature for Web Standard handlers. */
+export type WebAuthFunction = (
+  req: Request,
+  context: AuthorizationContext
+) => Promise<AuthInfo | AuthorizationFailure | null> | AuthInfo | AuthorizationFailure | null;
 
 /**
  * Configuration for creating a production MCP server and Node.js handler.
@@ -131,6 +188,8 @@ export interface ProductionServerConfig {
   resources: ProductionResource[];
   /** Auth function from server entry (populates extra.authInfo via req.auth) */
   auth?: AuthFunction;
+  /** OAuth protected-resource discovery and bearer challenge configuration. */
+  oauth?: OAuthProtectedResourceConfig;
   /**
    * Public URL of the MCP server (e.g. `'https://example.com/mcp'`).
    * Used to auto-compute a default `_meta.ui.domain` for resources that
@@ -178,6 +237,8 @@ export interface WebHandlerConfig {
   resources: ProductionResource[];
   /** Auth function for Web Standard Request objects */
   auth?: WebAuthFunction;
+  /** OAuth protected-resource discovery and bearer challenge configuration. */
+  oauth?: OAuthProtectedResourceConfig;
   /**
    * Public URL of the MCP server (e.g. `'https://example.com/mcp'`).
    * Used to auto-compute a default `_meta.ui.domain` for resources that
@@ -230,11 +291,124 @@ function toInternalConfig(
     tools: config.tools,
     resources: config.resources,
     serverUrl: config.serverUrl,
+    oauth: config.oauth,
     enableJsonResponse: config.enableJsonResponse,
     sseKeepAliveMs: config.sseKeepAliveMs,
     stateless: config.stateless,
     _clientName: clientName,
   };
+}
+
+function assertAbsoluteHttpUrl(value: string, label: string): URL {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${label} must be an absolute URL`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`${label} must use http or https`);
+  }
+  if (url.hash) {
+    throw new Error(`${label} must not contain a fragment`);
+  }
+  if (url.username || url.password) {
+    throw new Error(`${label} must not contain credentials`);
+  }
+  const isLoopback =
+    url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+  if (url.protocol === 'http:' && !isLoopback) {
+    throw new Error(`${label} must use https unless it is on localhost`);
+  }
+  return url;
+}
+
+/** Build the RFC 9728 metadata document for an MCP resource server. */
+export function createOAuthProtectedResourceMetadata(
+  config: OAuthProtectedResourceConfig,
+  serverUrl?: string
+): OAuthProtectedResourceMetadata {
+  const resource = config.resource ?? serverUrl;
+  if (!resource) {
+    throw new Error('OAuth protected-resource metadata requires `resource` or `serverUrl`');
+  }
+  if (config.authorizationServers.length === 0) {
+    throw new Error('OAuth protected-resource metadata requires an authorization server');
+  }
+  assertAbsoluteHttpUrl(resource, 'OAuth resource');
+  for (const authorizationServer of config.authorizationServers) {
+    assertAbsoluteHttpUrl(authorizationServer, 'OAuth authorization server');
+  }
+
+  return {
+    ...config.additionalMetadata,
+    resource,
+    authorization_servers: config.authorizationServers,
+    ...(config.scopesSupported?.length ? { scopes_supported: config.scopesSupported } : {}),
+    ...(config.resourceName ? { resource_name: config.resourceName } : {}),
+    ...(config.resourceDocumentation
+      ? { resource_documentation: config.resourceDocumentation }
+      : {}),
+    bearer_methods_supported: config.bearerMethodsSupported ?? ['header'],
+  };
+}
+
+/** Return the endpoint-specific RFC 9728 well-known URL for an MCP server URL. */
+export function getOAuthProtectedResourceMetadataUrl(serverUrl: string): string {
+  const resource = assertAbsoluteHttpUrl(serverUrl, 'MCP server URL');
+  const path = resource.pathname === '/' ? '' : resource.pathname.replace(/\/$/, '');
+  const metadataUrl = new URL(`/.well-known/oauth-protected-resource${path}`, resource.origin);
+  metadataUrl.search = resource.search;
+  return metadataUrl.toString();
+}
+
+function quoteChallengeValue(value: string): string {
+  if (/[\u0000-\u001f\u007f]/.test(value)) {
+    throw new Error('OAuth challenge values cannot contain control characters');
+  }
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function isAuthorizationFailure(value: unknown): value is AuthorizationFailure {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'authorized' in value &&
+    value.authorized === false
+  );
+}
+
+function authorizationFailureStatus(failure?: AuthorizationFailure): 400 | 401 | 403 {
+  if (failure?.status === 400 || failure?.status === 401 || failure?.status === 403) {
+    return failure.status;
+  }
+  if (failure?.error === 'invalid_request') return 400;
+  if (failure?.error === 'insufficient_scope') return 403;
+  return 401;
+}
+
+/** Build an RFC 6750 bearer challenge with MCP protected-resource discovery. */
+export function createOAuthChallenge(
+  serverUrl: string,
+  config: OAuthProtectedResourceConfig,
+  options: OAuthChallengeOptions = {}
+): string {
+  const parts = [
+    `resource_metadata=${quoteChallengeValue(getOAuthProtectedResourceMetadataUrl(serverUrl))}`,
+  ];
+  const scopes = options.scopes ?? config.scopesSupported;
+  if (scopes?.length) parts.push(`scope=${quoteChallengeValue(scopes.join(' '))}`);
+  if (options.error) parts.push(`error=${quoteChallengeValue(options.error)}`);
+  if (options.errorDescription) {
+    parts.push(`error_description=${quoteChallengeValue(options.errorDescription)}`);
+  }
+  return `Bearer ${parts.join(', ')}`;
+}
+
+function isOAuthMetadataPath(pathname: string, serverUrl?: string): boolean {
+  if (pathname === '/.well-known/oauth-protected-resource') return true;
+  if (!serverUrl) return false;
+  return pathname === new URL(getOAuthProtectedResourceMetadataUrl(serverUrl)).pathname;
 }
 
 // ============================================================================
@@ -473,7 +647,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers':
     'content-type, accept, authorization, mcp-session-id, ngrok-skip-browser-warning',
-  'Access-Control-Expose-Headers': 'mcp-session-id',
+  'Access-Control-Expose-Headers': 'mcp-session-id, www-authenticate',
 } as const;
 
 // Cap on POST body size for MCP requests. Without a cap, an unauthenticated
@@ -640,6 +814,12 @@ export function createMcpHandler(
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   const authFn = config.auth;
 
+  function publicServerUrl(requestUrl: URL): string {
+    return (
+      config.serverUrl ?? config.oauth?.resource ?? new URL(MCP_PATH, requestUrl.origin).toString()
+    );
+  }
+
   // ── Shared request preamble (path check, CORS, auth, body parsing) ──
   async function preamble(
     req: IncomingMessage,
@@ -648,23 +828,26 @@ export function createMcpHandler(
     if (!req.url) return null;
 
     const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+    if (
+      config.oauth &&
+      req.method === 'GET' &&
+      isOAuthMetadataPath(url.pathname, publicServerUrl(url))
+    ) {
+      const metadata = createOAuthProtectedResourceMetadata(config.oauth, publicServerUrl(url));
+      res.writeHead(200, {
+        ...CORS_HEADERS,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=300',
+      });
+      res.end(JSON.stringify(metadata));
+      return null;
+    }
     if (url.pathname !== MCP_PATH) return null;
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204, CORS_HEADERS);
       res.end();
       return null;
-    }
-
-    let authInfo: AuthInfo | undefined;
-    if (authFn) {
-      const result = await authFn(req);
-      if (!result) {
-        res.writeHead(401, { ...CORS_HEADERS, 'WWW-Authenticate': 'Bearer' });
-        res.end('Unauthorized');
-        return null;
-      }
-      authInfo = result;
     }
 
     let parsedBody: unknown;
@@ -700,6 +883,22 @@ export function createMcpHandler(
         res.writeHead(400).end('Invalid JSON');
         return null;
       }
+    }
+
+    let authInfo: AuthInfo | undefined;
+    if (authFn) {
+      const result = await authFn(req, { body: parsedBody });
+      if (!result || isAuthorizationFailure(result)) {
+        const options = isAuthorizationFailure(result) ? result : undefined;
+        const challenge = config.oauth
+          ? createOAuthChallenge(publicServerUrl(url), config.oauth, options)
+          : 'Bearer';
+        const status = authorizationFailureStatus(options);
+        res.writeHead(status, { ...CORS_HEADERS, 'WWW-Authenticate': challenge });
+        res.end('Unauthorized');
+        return null;
+      }
+      authInfo = result;
     }
 
     return { authInfo, parsedBody, webRequest: nodeReqToWebRequest(req) };
@@ -893,24 +1092,32 @@ export function createMcpHandler(
 export function createHandler(config: WebHandlerConfig): (req: Request) => Promise<Response> {
   const authFn = config.auth;
 
+  function publicServerUrl(req: Request): string {
+    return config.serverUrl ?? config.oauth?.resource ?? req.url;
+  }
+
   // ── Shared request preamble (CORS, auth, body parsing) ──
   async function webPreamble(
     req: Request
   ): Promise<{ authInfo?: AuthInfo; parsedBody?: unknown } | Response> {
+    const url = new URL(req.url);
+    if (
+      config.oauth &&
+      req.method === 'GET' &&
+      isOAuthMetadataPath(url.pathname, publicServerUrl(req))
+    ) {
+      const metadata = createOAuthProtectedResourceMetadata(config.oauth, publicServerUrl(req));
+      return new Response(JSON.stringify(metadata), {
+        status: 200,
+        headers: {
+          ...CORS_HEADERS,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=300',
+        },
+      });
+    }
     if (req.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
-    }
-
-    let authInfo: AuthInfo | undefined;
-    if (authFn) {
-      const result = await authFn(req);
-      if (!result) {
-        return new Response('Unauthorized', {
-          status: 401,
-          headers: { 'WWW-Authenticate': 'Bearer', 'Access-Control-Allow-Origin': '*' },
-        });
-      }
-      authInfo = result;
     }
 
     let parsedBody: unknown;
@@ -955,6 +1162,25 @@ export function createHandler(config: WebHandlerConfig): (req: Request) => Promi
         });
         log('info', `Headers: ${JSON.stringify(headerEntries, null, 2)}`);
       }
+    }
+
+    let authInfo: AuthInfo | undefined;
+    if (authFn) {
+      const result = await authFn(req, { body: parsedBody });
+      if (!result || isAuthorizationFailure(result)) {
+        const options = isAuthorizationFailure(result) ? result : undefined;
+        const challenge = config.oauth
+          ? createOAuthChallenge(publicServerUrl(req), config.oauth, options)
+          : 'Bearer';
+        return new Response('Unauthorized', {
+          status: authorizationFailureStatus(options),
+          headers: {
+            ...CORS_HEADERS,
+            'WWW-Authenticate': challenge,
+          },
+        });
+      }
+      authInfo = result;
     }
 
     return { authInfo, parsedBody };
