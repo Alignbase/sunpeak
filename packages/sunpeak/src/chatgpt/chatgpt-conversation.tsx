@@ -296,6 +296,7 @@ export function Conversation({
                             style={{
                               backgroundColor:
                                 'var(--sim-bg-user-bubble, var(--color-background-tertiary))',
+                              color: 'var(--sim-text-user-bubble, var(--color-text-primary))',
                               // @ts-expect-error -- corner-shape is a newer CSS property (squircle)
                               cornerShape: 'superellipse',
                             }}
@@ -442,6 +443,7 @@ export function Conversation({
                           style={{
                             backgroundColor:
                               'var(--sim-bg-user-bubble, var(--color-background-tertiary))',
+                            color: 'var(--sim-text-user-bubble, var(--color-text-primary))',
                             // @ts-expect-error -- corner-shape is a newer CSS property (squircle)
                             cornerShape: 'superellipse',
                           }}

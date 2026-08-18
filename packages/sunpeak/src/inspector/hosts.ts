@@ -104,6 +104,7 @@ export interface HostShell {
    * These are applied to the document root and can override the defaults:
    *   --sim-bg-sidebar       (fallback: var(--color-background-secondary))
    *   --sim-bg-conversation  (fallback: var(--color-background-primary))
+   *   --sim-text-user-bubble (fallback: var(--color-text-primary))
    *
    * Values should use CSS light-dark() for automatic theme adaptation.
    */

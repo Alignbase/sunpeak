@@ -32,6 +32,7 @@ describe('ChatGPTPage plugin navigation', () => {
 
     await hostPage.refreshMcpServer({ appName: 'Acme Support' });
 
+    expect(CHATGPT_URLS.plugins).toBe('https://chatgpt.com/plugins#settings/Plugins');
     expect(page.goto).toHaveBeenNthCalledWith(1, CHATGPT_URLS.plugins, {
       waitUntil: 'domcontentloaded',
     });
@@ -83,6 +84,36 @@ describe('ChatGPTPage plugin navigation', () => {
     await expect(hostPage._findAndClickRefresh('Acme Support')).resolves.toBe(false);
 
     expect(refresh.click).not.toHaveBeenCalled();
+  });
+
+  it('selects a plugin row whose accessible name includes its connection status', async () => {
+    const refresh = createLocator({ visible: true });
+    const pluginRow = createLocator({ visible: true });
+    const missing = createLocator();
+    const page = {
+      locator: vi.fn((selector: string) => {
+        if (selector === CHATGPT_SELECTORS.refreshButton) return refresh;
+        if (selector === CHATGPT_SELECTORS.reconnectButton) return missing;
+        throw new Error(`Unexpected selector: ${selector}`);
+      }),
+      getByText: vi.fn().mockReturnValue(missing),
+      getByRole: vi.fn((role: string, options: { name: string | RegExp }) => {
+        if (role === 'button' && options.name instanceof RegExp) return pluginRow;
+        return missing;
+      }),
+      waitForTimeout: vi.fn().mockResolvedValue(undefined),
+    };
+    const hostPage = new ChatGPTPage(page);
+
+    await expect(hostPage._findAndClickRefresh('host-inspector')).resolves.toBe(true);
+
+    const rowName = page.getByRole.mock.calls.find(
+      ([role, options]) => role === 'button' && options.name instanceof RegExp
+    )?.[1].name as RegExp;
+    expect(rowName.test('host-inspector Connected')).toBe(true);
+    expect(rowName.test('OpenAI Developers Reconnect')).toBe(false);
+    expect(pluginRow.click).toHaveBeenCalledOnce();
+    expect(refresh.click).toHaveBeenCalledOnce();
   });
 
   it('explains the current setup flow when the app is missing', async () => {

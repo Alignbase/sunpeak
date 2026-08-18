@@ -43,8 +43,8 @@ describe('Inspector', () => {
 
       const { unmount } = render(<Inspector simulations={{ test: createSim() }} />);
 
-      expect(document.documentElement.style.backgroundColor).toBe('#212121');
-      expect(document.body.style.backgroundColor).toBe('#212121');
+      expect(document.documentElement.style.backgroundColor).toBe('rgb(0, 0, 0)');
+      expect(document.body.style.backgroundColor).toBe('rgb(0, 0, 0)');
 
       unmount();
     });

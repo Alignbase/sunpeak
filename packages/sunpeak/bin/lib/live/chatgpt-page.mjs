@@ -11,7 +11,7 @@ import { HostPage } from './host-page.mjs';
 /**
  * All ChatGPT DOM selectors in one place for easy maintenance.
  *
- * Updated: 2026-07-10 for the documented ChatGPT Plugins flow.
+ * Updated: 2026-08-18 for the ChatGPT plugin settings modal.
  */
 const SELECTORS = {
   // Chat interface
@@ -41,7 +41,7 @@ const SELECTORS = {
 
 const URLS = {
   base: 'https://chatgpt.com',
-  plugins: 'https://chatgpt.com/plugins',
+  plugins: 'https://chatgpt.com/plugins#settings/Plugins',
 };
 
 const PLUGIN_SETUP_HINT =
@@ -200,10 +200,12 @@ export class ChatGPTPage extends HostPage {
     };
 
     if (appName) {
+      const escapedAppName = appName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pluginRowName = new RegExp(`^${escapedAppName}(?:\\s|$)`, 'i');
       const strategies = [
         () => this.page.getByText(appName, { exact: true }).first(),
         () => this.page.getByRole('link', { name: appName, exact: true }).first(),
-        () => this.page.getByRole('button', { name: appName, exact: true }).first(),
+        () => this.page.getByRole('button', { name: pluginRowName }).first(),
       ];
 
       for (const getLocator of strategies) {
