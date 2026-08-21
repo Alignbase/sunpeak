@@ -7,13 +7,13 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@ai-sdk/google@4.0.37'
   - '@modelcontextprotocol/sdk@1.30.0'
-  - '@ai-sdk/anthropic@4.0.38'
-  - '@ai-sdk/gateway@4.0.51'
-  - '@ai-sdk/openai@4.0.41'
-  - ai@7.0.64
-  - mapbox-gl@3.28.1
+  - '@ai-sdk/anthropic@4.0.40'
+  - '@ai-sdk/gateway@4.0.59'
+  - '@ai-sdk/openai@4.0.45'
+  - ai@7.0.73
+  - mapbox-gl@3.29.0
   - tsx@4.23.12
-  - vite@8.2.1
+  - vite@8.2.2
 overrides:
   '@hono/node-server': 2.0.11
   body-parser: 2.3.0

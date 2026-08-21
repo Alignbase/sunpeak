@@ -17,8 +17,8 @@
   "dependencies": {
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.6.0",
-    "mapbox-gl": "^3.28.1",
-    "sunpeak": "^0.20.77",
+    "mapbox-gl": "^3.29.0",
+    "sunpeak": "^0.20.79",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },
@@ -28,17 +28,17 @@
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.4",
+    "@testing-library/user-event": "^14.6.5",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.0.5",
-    "happy-dom": "^20.11.2",
+    "@vitejs/plugin-react": "^6.1.0",
+    "happy-dom": "^20.11.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
-    "vite": "8.2.1",
-    "vitest": "^4.1.10"
+    "vite": "8.2.2",
+    "vitest": "^4.1.11"
   }
 }
