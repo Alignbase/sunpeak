@@ -972,6 +972,12 @@ function isAuthError(err) {
   // The MCP SDK throws UnauthorizedError for auth failures.
   if (err.constructor?.name === 'UnauthorizedError') return true;
 
+  // StreamableHTTPError exposes the HTTP status as `code`. Some servers return
+  // a plain-text body such as "Unauthorized", so the numeric status may be the
+  // only reliable signal available to the caller. Keep the adjacent status
+  // properties for compatibility with other HTTP client error shapes.
+  if (err.code === 401 || err.status === 401 || err.statusCode === 401) return true;
+
   // StreamableHTTPError includes a status code in its message.
   // Check for the specific "401" HTTP status pattern, not substring matches.
   const msg = err.message || '';

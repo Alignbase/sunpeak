@@ -378,6 +378,16 @@ describe('isAuthError', () => {
     expect(isAuthError(err)).toBe(true);
   });
 
+  it('detects StreamableHTTPError numeric status codes with plain-text bodies', async () => {
+    const isAuthError = await loadIsAuthError();
+    const err = Object.assign(
+      new Error('Streamable HTTP error: Error POSTing to endpoint: Unauthorized'),
+      { code: 401 }
+    );
+
+    expect(isAuthError(err)).toBe(true);
+  });
+
   it('detects HTTP 401 text messages', async () => {
     const isAuthError = await loadIsAuthError();
     expect(isAuthError(new Error('HTTP 401 Unauthorized'))).toBe(true);
