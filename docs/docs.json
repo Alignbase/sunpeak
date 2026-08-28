@@ -459,6 +459,7 @@
             "pages": [
               "mcp-apps/mcp/overview",
               "mcp-apps/mcp/2026-07-28",
+              "mcp-apps/mcp/authorization",
               "mcp-apps/mcp/resources",
               "mcp-apps/mcp/tools"
             ]

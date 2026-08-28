@@ -124,6 +124,10 @@ The Host must reject View calls to tools without `"app"` visibility. App-only to
 
 Visibility is not authorization. A button click is still an untrusted `tools/call` request. Every tool handler must validate input, authenticate the caller, check access to the target record, rate limit when needed, and protect destructive operations against replay.
 
+For protected HTTP servers, use the standard [MCP OAuth authorization
+flow](/mcp-apps/mcp/authorization). The Host manages the access token, while the View calls tools
+through the Host without reading or storing that token.
+
 Use standard [tool annotations](/mcp-apps/server/tool-annotations) to describe read-only, destructive, idempotent, and open-world behavior. Hosts must treat those annotations as untrusted hints, so server checks remain required.
 
 ## Tool Result Data
@@ -173,10 +177,10 @@ Use Host-mediated APIs for actions outside the sandbox:
     Normative sandbox, CSP, visibility, transport, and threat-model requirements.
   </Card>
   <Card
-    title="Core MCP Security Principles"
+    title="Core MCP Authorization"
     icon="link"
-    href="https://modelcontextprotocol.io/specification/2025-11-25"
+    href="https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization"
   >
-    Consent, privacy, tool safety, and server input validation requirements.
+    OAuth discovery, token handling, scope upgrades, and security requirements.
   </Card>
 </CardGroup>
