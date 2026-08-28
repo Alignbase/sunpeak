@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, it, expect } from 'vitest';
 import { createHandler, createMcpHandler, detectClientFromHeaders } from './production-server.js';
 import type { WebHandlerConfig, ProductionServerConfig } from './production-server.js';
