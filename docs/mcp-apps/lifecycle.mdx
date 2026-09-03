@@ -77,10 +77,10 @@ The View-to-Host MCP Apps version is separate from the core MCP version used bet
 
 The Host sends tool arguments and results to the View:
 
-- **`ui/notifications/tool-input`** -- Complete tool arguments after the tool call begins
-- **`ui/notifications/tool-input-partial`** -- Streaming partial arguments (healed JSON) for progressive rendering
-- **`ui/notifications/tool-result`** -- Tool execution result from the server, including both `content` (readable text) and `structuredContent` (typed data the model may read and the UI can render)
-- **`ui/notifications/tool-cancelled`** -- Notification that tool execution was cancelled
+- **[`ui/notifications/tool-input`](/mcp-apps/app/event-handlers/ontoolinput)**: Complete tool arguments after the tool call begins
+- **[`ui/notifications/tool-input-partial`](/mcp-apps/app/event-handlers/ontoolinputpartial)**: Best-effort streaming arguments for progressive rendering
+- **[`ui/notifications/tool-result`](/mcp-apps/app/event-handlers/ontoolresult)**: Tool execution result from the server, including both `content` (readable text) and `structuredContent` (typed data the model may read and the UI can render)
+- **[`ui/notifications/tool-cancelled`](/mcp-apps/app/event-handlers/ontoolcancelled)**: Notification that tool execution was cancelled
 
 ## 4. Interactive Phase
 

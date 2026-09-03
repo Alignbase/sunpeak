@@ -1,7 +1,7 @@
 ---
 title: "useToolData"
-description: "Access tool input and output data."
-keywords: ["MCP Apps", "ChatGPT Apps", "React hooks", "tool data", "tool input"]
+description: "Access complete and streaming MCP tool input, structured tool output, loading state, errors, and cancellation in a React View."
+keywords: ["MCP Apps", "ChatGPT Apps", "React hooks", "tool data", "tool input", "streaming tool input", "inputPartial"]
 ---
 
 <Badge color="yellow">sunpeak API</Badge>
@@ -44,11 +44,11 @@ function useToolData<TInput, TOutput>(
 Returns a `ToolData<TInput, TOutput>` object with the following fields:
 
 <ResponseField name="input" type="TInput | null">
-  The tool call arguments.
+  The complete tool call arguments. Partial notifications do not overwrite this field.
 </ResponseField>
 
 <ResponseField name="inputPartial" type="TInput | null">
-  Streaming partial input during tool execution.
+  The latest streaming partial input. sunpeak clears it when complete input arrives.
 </ResponseField>
 
 <ResponseField name="output" type="TOutput | null">
@@ -102,3 +102,32 @@ function ReviewResource() {
   );
 }
 ```
+
+## Stream a Preview Before Complete Input Arrives
+
+MCP hosts may send zero or more partial input notifications before the complete tool arguments. Read `inputPartial` for preview UI and `input` for the finalized value:
+
+```tsx
+import { useToolData } from 'sunpeak';
+
+interface DocumentInput {
+  title?: string;
+  body?: string;
+}
+
+function DocumentPreview() {
+  const { inputPartial, input, isCancelled } = useToolData<DocumentInput>();
+  const currentInput = inputPartial ?? input;
+
+  if (isCancelled) return <p>Generation cancelled.</p>;
+
+  return (
+    <article aria-busy={inputPartial !== null}>
+      <h1>{currentInput?.title ?? 'Untitled'}</h1>
+      <pre>{currentInput?.body ?? 'Waiting for content...'}</pre>
+    </article>
+  );
+}
+```
+
+`inputPartial` can contain missing, truncated, or changing fields. Use it only for rendering a preview. Wait for `input` before saving data or starting an action. See [`ontoolinputpartial`](/mcp-apps/app/event-handlers/ontoolinputpartial) for the protocol event order and local testing steps.

@@ -109,6 +109,7 @@ View code should:
 - Use the `App` SDK instead of hand-written `postMessage` listeners.
 - Check [Host capabilities](/mcp-apps/app/accessors/get-host-capabilities) before calling an optional API.
 - Treat tool results, host context, and server resources as untrusted input before placing strings into the DOM.
+- Treat streaming partial tool input as untrusted and incomplete. Use it only for preview UI, never to authorize or start an operation.
 - Use DOM text nodes or framework escaping for text. Avoid passing result strings to `innerHTML`.
 - Keep dependencies current and avoid enabling `allowUnsafeEval` unless the Host CSP permits it and you control the code path.
 
@@ -164,6 +165,7 @@ Use Host-mediated APIs for actions outside the sandbox:
 - Destructive calls are honestly annotated and safe against retries.
 - Model-safe data goes in `content` or `structuredContent`; View-only data goes in `_meta`.
 - Result strings render through escaped text APIs.
+- Partial tool input cannot trigger tool calls, writes, or other side effects.
 - The app works in a real separate-origin sandbox, not only a same-origin development iframe.
 
 ## Primary References

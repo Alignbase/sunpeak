@@ -1,8 +1,8 @@
 ---
 title: "MCP Apps ontoolinputpartial - Streaming Partial Tool Arguments"
 sidebarTitle: "ontoolinputpartial"
-description: "Handle streaming partial tool arguments for progressive UI rendering. Use ontoolinputpartial to display preview content while the host is still generating tool input."
-keywords: ["MCP Apps", "ChatGPT Apps", "ontoolinputpartial", "partial input", "streaming", "progressive rendering", "event handler", "notification handler"]
+description: "Handle MCP Apps streaming tool input safely with ontoolinputpartial, including event order, incomplete fields, React state, and local testing."
+keywords: ["MCP Apps", "ChatGPT Apps", "ontoolinputpartial", "ui/notifications/tool-input-partial", "partial tool input", "streaming tool arguments", "progressive rendering", "MCP streaming UI", "event handler"]
 ---
 
 <Badge color="green">MCP Apps SDK</Badge>
@@ -13,9 +13,9 @@ import { App } from "@modelcontextprotocol/ext-apps";
 
 ## Overview
 
-The `ontoolinputpartial` notification handler is called as the host streams partial tool arguments during tool call initialization. This enables progressive rendering -- your app can display a live preview of content before the complete input is available.
+The `ontoolinputpartial` notification handler receives best-effort tool arguments while the host is still generating a tool call. Use it to show a preview before the complete input arrives.
 
-Partial arguments are delivered as "healed" JSON: the host closes any unclosed brackets or braces to produce valid JSON at each step. This means the data is always parseable but may be incomplete.
+The host may recover incomplete JSON by closing open brackets or braces before sending each notification. The resulting `arguments` object is valid JSON, but fields can be missing, truncated, replaced, or removed by a later notification.
 
 Like all notification handlers, `ontoolinputpartial` should be registered before calling `connect()`.
 
@@ -24,8 +24,18 @@ Register handlers **before** calling `connect()` to avoid missing notifications 
 </Warning>
 
 <Warning>
-Partial arguments are "healed" JSON -- the host closes unclosed brackets/braces to produce valid JSON. The last item in arrays or objects may be truncated. Use partial data only for preview UI, not for critical operations.
+Use partial input only for preview UI. Do not save data, submit forms, call tools, or start any other operation that depends on complete arguments.
 </Warning>
+
+## Event Order
+
+For one tool call, the host sends events in this order:
+
+1. Zero or more `ui/notifications/tool-input-partial` notifications while arguments stream.
+2. At most one [`ui/notifications/tool-input`](/mcp-apps/app/event-handlers/ontoolinput) notification with the complete arguments. The host stops sending partials after this event.
+3. A [`ui/notifications/tool-result`](/mcp-apps/app/event-handlers/ontoolresult) or [`ui/notifications/tool-cancelled`](/mcp-apps/app/event-handlers/ontoolcancelled) notification.
+
+An app may ignore partial notifications. Always support the complete input event because hosts do not have to stream partials.
 
 ## Signature
 
@@ -36,7 +46,7 @@ app.ontoolinputpartial = (params) => void;
 ## Parameters
 
 <ResponseField name="params.arguments" type="Record<string, unknown>">
-  Partial tool arguments (healed JSON -- incomplete objects may be truncated).
+  Best-effort tool arguments recovered from incomplete JSON. Fields may be missing or change between notifications.
 </ResponseField>
 
 ## Usage
@@ -49,7 +59,9 @@ const app = new App({ name: "MyApp", version: "1.0.0" });
 const codePreview = document.querySelector<HTMLPreElement>("#code-preview")!;
 
 app.ontoolinputpartial = (params) => {
-  codePreview.textContent = (params.arguments?.code as string) ?? "";
+  codePreview.textContent = typeof params.arguments?.code === "string"
+    ? params.arguments.code
+    : "";
 };
 
 await app.connect();
@@ -63,32 +75,70 @@ Combine `ontoolinputpartial` for live preview with `ontoolinput` for the finaliz
 const preview = document.querySelector<HTMLElement>("#preview")!;
 
 app.ontoolinputpartial = (params) => {
-  const markdown = (params.arguments?.content as string) ?? "";
-  preview.innerHTML = renderMarkdownPreview(markdown);
-  preview.classList.add("streaming");
+  const markdown = typeof params.arguments?.content === "string"
+    ? params.arguments.content
+    : "";
+  preview.textContent = markdown;
+  preview.dataset.state = "streaming";
 };
 
 app.ontoolinput = (params) => {
-  const markdown = params.arguments.content as string;
-  preview.innerHTML = renderMarkdownFinal(markdown);
-  preview.classList.remove("streaming");
+  const markdown = typeof params.arguments?.content === "string"
+    ? params.arguments.content
+    : "";
+  preview.textContent = markdown;
+  preview.dataset.state = "complete";
+};
+
+app.ontoolcancelled = () => {
+  preview.textContent = "Tool call cancelled";
+  preview.dataset.state = "cancelled";
 };
 ```
 
+<Warning>
+Partial arguments come from model-generated input, so treat them as untrusted. Render text with `textContent` or framework escaping. If you render Markdown or HTML, sanitize it before assigning it to `innerHTML`.
+</Warning>
+
 ### Using with the sunpeak framework
 
-The sunpeak framework provides the [`useToolData`](/app-framework/hooks/use-tool-data) hook, which manages both partial and complete tool input as a reactive value. This is the recommended approach when building with sunpeak.
+The sunpeak framework provides the [`useToolData`](/app-framework/hooks/use-tool-data) hook. Partial and complete arguments use separate fields so preview state cannot overwrite finalized input.
 
-```ts
+```tsx
 import { useToolData } from "sunpeak";
 
-function MyComponent() {
-  const toolData = useToolData();
-  // toolData.input updates progressively as partial arguments stream in
+interface DraftInput {
+  content?: string;
+}
+
+function Preview() {
+  const { inputPartial, input, isCancelled } = useToolData<DraftInput>();
+  const currentInput = inputPartial ?? input;
+
+  if (isCancelled) return <p>Tool call cancelled</p>;
+
+  return (
+    <pre data-state={inputPartial ? "streaming" : input ? "complete" : "waiting"}>
+      {currentInput?.content ?? "Waiting for input..."}
+    </pre>
+  );
 }
 ```
 
+`inputPartial` updates as partial notifications arrive. When the complete input arrives, sunpeak sets `input`, clears `inputPartial`, and keeps the final arguments available for the rest of the tool lifecycle.
+
+## Test Streaming Input Locally
+
+Run `sunpeak dev`, open **Tool Input** in the inspector sidebar, edit the JSON, and click **Send as Partial (Streaming)**. Check that your View:
+
+- Renders missing and incomplete fields without throwing.
+- Does not trigger tool calls or other side effects from a partial event.
+- Replaces the preview when complete input or cancellation arrives.
+
+See [Inspector Controls](/testing/inspector#sidebar-controls) for the rest of the tool lifecycle controls.
+
 ## Related
 
-- [Event Handlers overview](/mcp-apps/app/event-handlers) -- all notification and request handlers
-- [ontoolinput](/mcp-apps/app/event-handlers/ontoolinput) -- receive complete tool arguments
+- [Event Handlers overview](/mcp-apps/app/event-handlers) for all notification and request handlers
+- [MCP App lifecycle](/mcp-apps/lifecycle) for event ordering from initialization through teardown
+- [MCP Apps security](/mcp-apps/security) for rendering untrusted tool data
