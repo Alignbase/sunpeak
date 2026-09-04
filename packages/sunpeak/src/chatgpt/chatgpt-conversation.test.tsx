@@ -18,10 +18,11 @@ describe('Conversation', () => {
     );
 
     expect(screen.getByText('Hello, show me places')).toBeInTheDocument();
-    expect(screen.getByText('Hello, show me places').parentElement).toHaveStyle({
-      backgroundColor: 'var(--sim-bg-user-bubble, var(--color-background-tertiary))',
-      color: 'var(--sim-text-user-bubble, var(--color-text-primary))',
-    });
+    const userBubble = screen.getByText('Hello, show me places').parentElement as HTMLElement;
+    expect(userBubble.style.backgroundColor).toBe(
+      'var(--sim-bg-user-bubble, var(--color-background-tertiary))'
+    );
+    expect(userBubble.style.color).toBe('var(--sim-text-user-bubble, var(--color-text-primary))');
     expect(screen.getByTestId('app-ui')).toBeInTheDocument();
     expect(screen.getByText('App UI Content')).toBeInTheDocument();
   });
