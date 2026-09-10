@@ -1,8 +1,8 @@
 ---
 title: "MCP Apps FAQ - Common Questions About Building MCP Apps"
 sidebarTitle: "FAQ"
-description: "Answers to common questions about MCP Apps: how they work, which hosts support them, how UIs are delivered and secured, how the iframe talks to the host, display modes, theming, and how to test apps locally."
-keywords: ["MCP Apps", "MCP Apps FAQ", "ChatGPT Apps", "ChatGPT plugins", "Claude Apps", "MCP app framework", "ui:// resource", "MCP Apps SDK", "how to build an MCP App", "MCP App iframe", "MCP App display modes"]
+description: "Answers to common questions about MCP Apps: SDK versions, supported hosts, UI delivery, iframe security, display modes, theming, and local testing."
+keywords: ["MCP Apps", "MCP Apps FAQ", "ChatGPT Apps", "ChatGPT plugins", "Claude Apps", "MCP app framework", "ui:// resource", "MCP Apps SDK", "MCP Apps SDK 2.0", "how to build an MCP App", "MCP App iframe", "MCP App display modes"]
 ---
 
 <Badge color="green">MCP Apps SDK</Badge>
@@ -65,6 +65,10 @@ The host injects its theme as CSS variables and reports the current theme in the
 
 <Accordion title="What language or framework do I build an MCP App in?">
 The app is plain HTML and JavaScript running in an iframe, so any frontend stack works. The MCP Apps SDK ships TypeScript helpers and React hooks for the host connection (see the [App class](/mcp-apps/app/app-class) and [React hooks](/mcp-apps/react/use-app)). The [sunpeak](/quickstart) framework layers a React-first, convention-over-configuration project structure on top.
+</Accordion>
+
+<Accordion title="Should I use MCP Apps SDK 1.x or 2.0?">
+Use the SDK version required by your framework. sunpeak 0.20.x uses `@modelcontextprotocol/ext-apps` 1.7.5 and the MCP TypeScript SDK 1.30, so do not replace them independently. Standalone apps can use ext-apps 2.0 with the split MCP SDK packages and Zod 4.2 or newer. The View-to-Host wire protocol remains `2026-01-26`, so 1.x and 2.x Views and Hosts can communicate. See the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) for install commands and TypeScript changes.
 </Accordion>
 
 <Accordion title="How do I test an MCP App without deploying to a host?">

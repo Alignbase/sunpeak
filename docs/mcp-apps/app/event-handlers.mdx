@@ -189,6 +189,12 @@ app.setNotificationHandler(McpUiToolInputNotificationSchema, (notification) => {
 });
 ```
 
+<Note>
+  This is the SDK 1.x schema-keyed form. SDK 2.0 keys handlers by method name and keeps this form
+  only as a deprecated overload. See [Update Custom Protocol
+  Handlers](/mcp-apps/sdk-v2-migration#update-custom-protocol-handlers).
+</Note>
+
 <Tip>
 Register event handlers in the `onAppCreated` callback of [`useApp`](/mcp-apps/react/use-app) to ensure they're set before the handshake. The [sunpeak framework](/quickstart) provides convenience hooks: [`useToolData`](/app-framework/hooks/use-tool-data), [`useTeardown`](/app-framework/hooks/use-teardown), and [`useAppTools`](/app-framework/hooks/use-app-tools).
 </Tip>

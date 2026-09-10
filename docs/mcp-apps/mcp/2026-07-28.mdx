@@ -34,7 +34,7 @@ Those are separate protocol layers, so updating an MCP server does not remove th
   transport layer while still speaking the handshake-based `2025-11-25` revision.
 </Warning>
 
-The MCP TypeScript SDK implements the 2026 revision in its v2 API. `@modelcontextprotocol/ext-apps@1.7.5` depends on the v1 MCP SDK, so do not upgrade one package independently in a sunpeak project.
+The MCP TypeScript SDK implements the 2026 revision in its v2 API. `@modelcontextprotocol/ext-apps@2.0.0` uses those split v2 packages, but sunpeak 0.20.x still uses ext-apps 1.7.5 and the monolithic v1 MCP SDK. Do not upgrade either package independently in a sunpeak project. See the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) for the standalone SDK boundary.
 
 ## What Changed in Core MCP
 
@@ -153,5 +153,8 @@ You do not need to change View code for the new core revision. On the server sid
   </Card>
   <Card title="Versions and Compatibility" icon="page" href="/mcp-apps/protocol-versions">
     Compare core MCP, MCP Apps, SDK package, and app versions.
+  </Card>
+  <Card title="MCP Apps SDK 2.0 Migration" icon="page" href="/mcp-apps/sdk-v2-migration">
+    Package, schema, handler, and error changes in ext-apps 2.0.
   </Card>
 </CardGroup>

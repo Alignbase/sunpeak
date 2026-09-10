@@ -16,6 +16,12 @@ import { registerAppTool } from '@modelcontextprotocol/ext-apps/server';
 
 `registerAppTool` is a convenience wrapper around the MCP SDK's [`server.registerTool()`](/mcp-apps/mcp/tools) that normalizes [UI metadata](/mcp-apps/introduction#how-are-tools-linked-to-uis) for compatibility across hosts. Use it instead of `registerTool` when your tool should render a View or when it needs MCP App visibility metadata.
 
+<Note>
+  This reference uses the raw Zod shape accepted by SDK 1.7.5. In SDK 2.0, wrap input and output
+  shapes with `z.object()`. The raw shape overload is deprecated. See the [SDK 2.0 migration
+  guide](/mcp-apps/sdk-v2-migration#wrap-tool-schemas-with-zobject).
+</Note>
+
 ## Signature
 
 ```ts

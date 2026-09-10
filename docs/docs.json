@@ -400,6 +400,7 @@
               "mcp-apps/lifecycle",
               "mcp-apps/security",
               "mcp-apps/protocol-versions",
+              "mcp-apps/sdk-v2-migration",
               "mcp-apps/layout",
               "mcp-apps/patterns",
               "mcp-apps/faq"

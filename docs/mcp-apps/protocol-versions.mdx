@@ -11,6 +11,8 @@ keywords:
     'MCP Apps version negotiation',
     'io.modelcontextprotocol/ui',
     'MCP Apps SDK version',
+    'MCP Apps SDK 2.0',
+    'ext-apps 2.0',
   ]
 ---
 
@@ -26,7 +28,7 @@ This distinction matters when an app works as a normal MCP tool but its UI does 
 | -------------------- | ----------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------- |
 | Core MCP protocol    | Latest: `2026-07-28`; sunpeak 0.20.x: `2025-11-25`    | Host ↔ MCP server requests                            | Tools, resources, transport, and core MCP capabilities              |
 | MCP Apps protocol    | `2026-01-26`                                          | View ↔ Host `ui/initialize`                           | View lifecycle, host context, app capabilities, and `ui/*` messages |
-| MCP Apps SDK package | `@modelcontextprotocol/ext-apps@1.7.5`                | `package.json`                                        | The implementation and APIs your code uses                          |
+| MCP Apps SDK package | Upstream: `2.0.0`; sunpeak 0.20.x: `1.7.5`           | `package.json`                                        | The implementation, peer dependencies, and TypeScript APIs          |
 | Your app version     | `1.4.0`                                               | `appInfo.version`                                     | Your View's identity, not protocol compatibility                    |
 
 The date-based protocol versions are independent. A Host can support a given core MCP version without supporting MCP Apps, and an MCP Apps-capable Host may expose only some optional View APIs.
@@ -35,6 +37,14 @@ The date-based protocol versions are independent. A Host can support a given cor
   The current MCP Apps SDK exports `LATEST_PROTOCOL_VERSION` as `"2026-01-26"`. Use the SDK
   handshake instead of copying this string into View code.
 </Note>
+
+## SDK 2.0 Changes APIs, Not the View Protocol
+
+`@modelcontextprotocol/ext-apps` 2.0 uses the split MCP TypeScript SDK 2.x packages. It changes dependencies, Zod requirements, handler context fields, custom handler registration, and error classes. It does not change the MCP Apps `2026-01-26` messages exchanged between the View and Host.
+
+A 2.x View can run in a 1.x Host, and a 2.x Host can render a 1.x View. This wire compatibility does not make their TypeScript classes interchangeable, and it does not make the core MCP 1.x and 2.x server APIs interchangeable.
+
+sunpeak 0.20.x uses ext-apps 1.7.5 and the monolithic MCP SDK 1.30. Keep those framework dependencies together. Standalone projects can use the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) to move to the split packages.
 
 ## Two Independent Protocol Layers
 
@@ -145,7 +155,7 @@ Use feature checks instead of Host-name checks. A Host can add capabilities with
 | View iframe appears, but stays blank or hidden | Confirm `app.connect()` completes and no host-bound method runs before the `ui/initialize` handshake.                                                    |
 | A View button fails to call a server tool      | Check `hostCapabilities.serverTools` and make sure the tool's visibility includes `"app"`.                                                               |
 | A View API works in one Host only              | Compare `getHostCapabilities()` results and add a disabled state or fallback for the missing feature.                                                    |
-| Protocol validation fails after an upgrade     | Check the installed `@modelcontextprotocol/ext-apps` and `@modelcontextprotocol/sdk` versions, then compare the payload with the SDK's exported schemas. |
+| Protocol validation fails after an upgrade     | For 1.x, check `@modelcontextprotocol/sdk`. For 2.x, check the split client, server, core, and Zod versions. Then compare the payload with the exported schemas. |
 
 ## Primary References
 
@@ -169,6 +179,9 @@ Use feature checks instead of Host-name checks. A Host can add capabilities with
   </Card>
   <Card title="Protocol Reference" icon="page" href="/mcp-apps/types/protocol-reference">
     MCP Apps types, schemas, method constants, and current SDK protocol constant.
+  </Card>
+  <Card title="MCP Apps SDK 2.0 Migration" icon="page" href="/mcp-apps/sdk-v2-migration">
+    Split package installs, TypeScript API changes, and cross-version compatibility.
   </Card>
   <Card title="Capability Detection" icon="page" href="/mcp-apps/server/capability-detection">
     Server-side detection and text fallback pattern.

@@ -1,0 +1,202 @@
+---
+title: 'MCP Apps SDK 2.0 Migration Guide'
+sidebarTitle: 'SDK 2.0 Migration'
+description: 'Migrate @modelcontextprotocol/ext-apps from 1.x to 2.0: split MCP SDK packages, Zod 4 schemas, handler context changes, errors, and wire compatibility.'
+keywords:
+  [
+    'MCP Apps SDK 2.0',
+    'ext-apps 2.0',
+    '@modelcontextprotocol/ext-apps migration',
+    'MCP TypeScript SDK 2.0',
+    '@modelcontextprotocol/client',
+    '@modelcontextprotocol/server',
+    'MCP Apps Zod 4',
+    'migrate MCP App',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+`@modelcontextprotocol/ext-apps` 2.0 moves to the split MCP TypeScript SDK 2.0 packages. The stable MCP Apps View protocol stays at `2026-01-26`, so 1.x and 2.x Views and Hosts can communicate over the iframe channel. The breaking changes affect npm dependencies and TypeScript APIs.
+
+<Warning>
+  sunpeak 0.20.x uses `@modelcontextprotocol/ext-apps` 1.7.5 and
+  `@modelcontextprotocol/sdk` 1.30. Do not replace either dependency with 2.0 in a sunpeak
+  project. Use sunpeak's exports and wait for a sunpeak release that adopts the split MCP SDK
+  packages.
+</Warning>
+
+This guide is for standalone MCP Apps and Hosts that import `@modelcontextprotocol/ext-apps` directly, or for teams preparing a future sunpeak upgrade.
+
+## What Stays Compatible
+
+The `ui/*` messages between a View and Host did not change. These combinations work:
+
+| View SDK | Host SDK | Iframe protocol |
+| --- | --- | --- |
+| 1.x | 1.x | Compatible |
+| 1.x | 2.x | Compatible |
+| 2.x | 1.x | Compatible |
+| 2.x | 2.x | Compatible |
+
+`App` and `AppBridge` constructors, `on*` handlers, `addEventListener()`, View requests such as `callServerTool()`, React hooks, `registerAppResource()`, and `_meta.ui.resourceUri` keep the same public shape.
+
+Core MCP between the Host and server is a separate protocol layer. MCP SDK 2.0 implements the core `2026-07-28` revision, so use [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28) when migrating a server or Host transport.
+
+## Install Packages by Role
+
+First remove the monolithic 1.x SDK:
+
+```bash
+pnpm remove @modelcontextprotocol/sdk
+```
+
+Then install the packages required by your role:
+
+<Tabs>
+  <Tab title="View or Host">
+    ```bash
+    pnpm add @modelcontextprotocol/ext-apps@^2 @modelcontextprotocol/client@^2 zod@^4.2
+    ```
+
+    Add `react` and `react-dom` when importing from `@modelcontextprotocol/ext-apps/react`.
+  </Tab>
+  <Tab title="MCP server">
+    ```bash
+    pnpm add @modelcontextprotocol/ext-apps@^2 @modelcontextprotocol/client@^2 \
+      @modelcontextprotocol/server@^2 @modelcontextprotocol/node@^2 zod@^4.2
+    ```
+
+    `@modelcontextprotocol/server` is optional for the package as a whole, but required for the helpers exported by `@modelcontextprotocol/ext-apps/server`.
+  </Tab>
+  <Tab title="Express server">
+    ```bash
+    pnpm add @modelcontextprotocol/ext-apps@^2 @modelcontextprotocol/client@^2 \
+      @modelcontextprotocol/server@^2 @modelcontextprotocol/node@^2 \
+      @modelcontextprotocol/express@^2 express zod@^4.2
+    ```
+  </Tab>
+</Tabs>
+
+Version 2 requires Node.js 20 or newer. `@modelcontextprotocol/core` is also a required peer, but package managers install it through `@modelcontextprotocol/client`, so applications do not normally list it directly.
+
+The `@modelcontextprotocol/ext-apps/app-with-deps` and `react-with-deps` entry points bundle the client, core, and Zod packages. They need no extra MCP peer installs, but their View bundles are about 25% larger than the 1.x bundled entry points.
+
+## Replace MCP SDK Imports
+
+The 2.x SDK uses role-specific packages:
+
+| 1.x import | 2.x import |
+| --- | --- |
+| `@modelcontextprotocol/sdk/server/mcp.js` | `@modelcontextprotocol/server` |
+| `@modelcontextprotocol/sdk/server/streamableHttp.js` | `@modelcontextprotocol/node` |
+| `@modelcontextprotocol/sdk/server/stdio.js` | `@modelcontextprotocol/server/stdio` |
+| Hand-written Express MCP routing | `createMcpExpressApp` from `@modelcontextprotocol/express` |
+| Types from `@modelcontextprotocol/sdk/types.js` | Role types from `@modelcontextprotocol/client` or `@modelcontextprotocol/server` |
+| Protocol Zod schemas from `@modelcontextprotocol/sdk/types.js` | `@modelcontextprotocol/core` |
+
+Do not pass 1.x clients, servers, errors, or request types into 2.x APIs. The packages use separate classes even where their wire messages are compatible.
+
+## Wrap Tool Schemas with `z.object()`
+
+Version 2 requires Zod 4.2 or another schema library that implements Standard JSON Schema. Raw Zod shapes still work in `registerAppTool()`, but that overload is deprecated.
+
+```ts
+// 1.x, still accepted but deprecated in 2.x
+inputSchema: { query: z.string() }
+
+// 2.x
+inputSchema: z.object({ query: z.string() })
+```
+
+Apply the same change to `outputSchema`. Zod 3, Zod 4.0, and Zod 4.1 do not meet the 2.x peer and schema requirements.
+
+## Update Handler Context Fields
+
+Custom handlers and tool callbacks receive the MCP SDK 2.x context:
+
+| 1.x | 2.x |
+| --- | --- |
+| `extra.signal` | `extra.mcpReq.signal` |
+| `extra.requestId` | `extra.mcpReq.id` |
+| `extra.authInfo` | `extra.http?.authInfo` |
+| `extra.sessionId` | `extra.sessionId` |
+
+Search all `registerAppTool()`, `app.registerTool()`, custom request-handler, and server tool callbacks for the old fields.
+
+## Update Custom Protocol Handlers
+
+SDK 2.0 keys custom request and notification handlers by method name. A custom request handler changes from the schema-keyed 1.x form to:
+
+```ts
+import { z } from 'zod';
+
+const PreviewParamsSchema = z.object({ source: z.string() });
+
+app.setRequestHandler(
+  'example/preview',
+  { params: PreviewParamsSchema },
+  async (params, context) => {
+    return createPreview(params.source, context.mcpReq.signal);
+  }
+);
+```
+
+The old `(Schema, handler)` form remains as a deprecated overload in ext-apps 2.x and logs a one-time warning. It is scheduled for removal in 3.0. Use `addEventListener()` or the SDK's progress callbacks instead of registering over built-in `notifications/progress` or `notifications/cancelled` handlers, which now throw an `already registered` error.
+
+## Update Error Handling
+
+Remote JSON-RPC errors are now `ProtocolError` with numeric codes. Local SDK failures are `SdkError` with string codes such as `"REQUEST_TIMEOUT"` and `"CONNECTION_CLOSED"`.
+
+Host error responses also changed in a few cases:
+
+| Situation | 1.x Host | 2.x Host |
+| --- | --- | --- |
+| Resource-not-found handler error | `-32002` | `-32602` |
+| Invalid parameters for a `ui/*` method | `-32603` | `-32602` |
+| Error message | Starts with `MCP error N:` | Plain message |
+| Unknown server tool | `CallToolResult` with `isError` | JSON-RPC `-32602`; `callServerTool()` rejects |
+
+Check error classes and codes instead of matching message text.
+
+## Remove Deprecated Types
+
+`ProtocolWithEvents` is removed in 2.0. `App` and `AppBridge` extend the SDK's `Protocol` class directly while keeping their DOM-style event methods.
+
+`AppRequest`, `AppNotification`, and `AppResult` remain as deprecated aliases for transition code. Replace generic routers built on these unions before ext-apps 3.0.
+
+## Migration Checklist
+
+- Remove `@modelcontextprotocol/sdk` and install the split packages for your role.
+- Confirm Node.js is version 20 or newer and Zod is version 4.2 or newer.
+- Replace 1.x MCP SDK imports.
+- Wrap raw tool input and output shapes with `z.object()`.
+- Move handler request fields under `extra.mcpReq` and HTTP auth under `extra.http`.
+- Convert custom handlers to method-keyed registration.
+- Replace `McpError` and message matching with `ProtocolError` or `SdkError` checks.
+- Run type checking, protocol tests, and View tests against both a 1.x and 2.x Host when you support both.
+
+## Primary References
+
+<CardGroup cols={2}>
+  <Card
+    title="MCP Apps SDK 2.0 Release"
+    icon="link"
+    href="https://github.com/modelcontextprotocol/ext-apps/releases/tag/v2.0.0"
+  >
+    Official breaking changes, dependency requirements, and interoperability notes.
+  </Card>
+  <Card
+    title="Official ext-apps 2.0 Migration Guide"
+    icon="link"
+    href="https://apps.extensions.modelcontextprotocol.io/api/documents/migrate-to-v2.html"
+  >
+    Detailed package, handler, error, and schema migration reference.
+  </Card>
+  <Card title="Versions and Compatibility" icon="page" href="/mcp-apps/protocol-versions">
+    Compare the core MCP protocol, MCP Apps protocol, SDK package, and app version.
+  </Card>
+  <Card title="Protocol Reference" icon="page" href="/mcp-apps/types/protocol-reference">
+    The 1.7.5 types and schemas currently used by sunpeak 0.20.x.
+  </Card>
+</CardGroup>

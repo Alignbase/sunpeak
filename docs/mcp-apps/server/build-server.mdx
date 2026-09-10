@@ -17,6 +17,12 @@ keywords:
 
 <Badge color="green">MCP Apps SDK</Badge>
 
+<Note>
+  This server example uses the MCP SDK 1.x package used by sunpeak 0.20.x. Standalone projects on
+  ext-apps 2.0 must use the split MCP SDK packages and `z.object()` schemas. See the [SDK 2.0
+  migration guide](/mcp-apps/sdk-v2-migration).
+</Note>
+
 An MCP App server is a normal MCP server with three additions:
 
 1. It detects whether the connecting host supports MCP Apps.
@@ -319,13 +325,13 @@ The View can call the tool through [`callServerTool()`](/mcp-apps/app/requests/c
   <Card title="registerAppTool" icon="page" href="/mcp-apps/server/register-app-tool">
     Register tools that render MCP App Views.
   </Card>
-  <Card title="Tool and Resource Contract" icon="list-check" href="/mcp-apps/server/tool-resource-contract">
+  <Card title="Tool and Resource Contract" icon="page" href="/mcp-apps/server/tool-resource-contract">
     Check the fields that connect MCP tools, UI resources, and tool results.
   </Card>
-  <Card title="Requirements Checklist" icon="check-check" href="/mcp-apps/server/requirements">
+  <Card title="Requirements Checklist" icon="page" href="/mcp-apps/server/requirements">
     Verify portability, fallback behavior, CSP, annotations, and host testing.
   </Card>
-  <Card title="Tool Annotations" icon="shield-check" href="/mcp-apps/server/tool-annotations">
+  <Card title="Tool Annotations" icon="page" href="/mcp-apps/server/tool-annotations">
     Add read-only, destructive, idempotent, and external-system hints.
   </Card>
   <Card title="MCP App Patterns" icon="page" href="/mcp-apps/patterns">

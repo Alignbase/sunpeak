@@ -15,7 +15,12 @@ keywords:
   ]
 ---
 
-<Note>This documentation covers MCP Apps SDK v1.7.5 (`@modelcontextprotocol/ext-apps`).</Note>
+<Note>
+  This API reference matches MCP Apps SDK v1.7.5, which sunpeak 0.20.x uses. The upstream
+  `@modelcontextprotocol/ext-apps` latest release is 2.0.0. Its iframe wire protocol is compatible,
+  but its dependencies and some TypeScript APIs changed. See the [SDK 2.0 migration
+  guide](/mcp-apps/sdk-v2-migration) before upgrading a standalone app.
+</Note>
 
 ## What are MCP Apps?
 
@@ -136,3 +141,5 @@ The [Layout and Display](/mcp-apps/layout) guide covers iframe sizing, display m
 If you are wiring the server side from scratch, start with [Build an MCP App Server](/mcp-apps/server/build-server). If you already have a normal MCP tool and want to add an interactive View, use [Add a UI to an MCP Tool](/mcp-apps/server/add-ui-to-tool). Before testing in a host, use the [MCP App Requirements Checklist](/mcp-apps/server/requirements) to verify portability, fallback behavior, CSP, annotations, and result data. For a field-by-field check, use the [Tool and Resource Contract](/mcp-apps/server/tool-resource-contract). For result payloads, use [Tool Results and Model Context](/mcp-apps/server/tool-results-model-context) to decide what belongs in `content`, `structuredContent`, `_meta`, and `updateModelContext`.
 
 If you already have OpenAI Apps SDK code, use [Migrate from OpenAI Apps SDK to MCP Apps](/mcp-apps/server/migrate-openai-apps) to map `openai/outputTemplate`, `text/html+skybridge`, `widgetCSP`, and `window.openai` APIs to MCP Apps equivalents.
+
+If you maintain a standalone MCP App on `@modelcontextprotocol/ext-apps` 1.x, use the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) for package, schema, handler, and error changes. sunpeak 0.20.x projects should stay on the framework-managed 1.7.5 SDK until sunpeak adopts the split MCP 2.x packages.
