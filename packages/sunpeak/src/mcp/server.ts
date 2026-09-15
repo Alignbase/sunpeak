@@ -7,11 +7,11 @@ import { gzipSync } from 'node:zlib';
 
 import { FAVICON_BUFFER, FAVICON_DATA_URI } from './favicon.js';
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
 import { randomUUID } from 'node:crypto';
 import { registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
-import type { RegisteredResource, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { RegisteredResource, RegisteredTool } from '@modelcontextprotocol/server';
 
 import { z } from 'zod';
 import { type MCPServerConfig, type MCPServerHandle, type SimulationWithDist } from './types.js';
@@ -259,13 +259,13 @@ const startupTimestamp = Date.now().toString(36);
  * Making fields optional preserves property types/descriptions in `tools/list`
  * (so models know what args to send) while letting the SDK accept any subset.
  */
-function makeSchemaOptional(shape: Record<string, unknown>): Record<string, unknown> {
-  const optional: Record<string, unknown> = {};
+function makeSchemaOptional(shape: Record<string, unknown>): z.ZodRawShape {
+  const optional: Record<string, z.ZodType> = {};
   for (const [key, value] of Object.entries(shape)) {
     const v = value as { optional?: () => unknown };
-    optional[key] = typeof v.optional === 'function' ? v.optional() : value;
+    optional[key] = (typeof v.optional === 'function' ? v.optional() : value) as z.ZodType;
   }
-  return optional;
+  return optional as z.ZodRawShape;
 }
 
 export function createAppServer(
@@ -325,7 +325,7 @@ export function createAppServer(
   for (const simulation of simulations) {
     const resource = simulation.resource;
     const tool = simulation.tool;
-    const toolResult = simulation.toolResult ?? { structuredContent: null };
+    const toolResult = simulation.toolResult;
     const toolMeta = (tool._meta as Record<string, unknown>) ?? {};
 
     if (resource) {
@@ -352,14 +352,11 @@ export function createAppServer(
             description: resource.description as string | undefined,
             _meta: listMeta,
           },
-          async (
-            readUri: URL,
-            extra: { requestInfo?: { headers?: Record<string, string | string[] | undefined> } }
-          ) => {
+          async (readUri, extra) => {
             // Claude's sandbox blocks HTTP script sources, so serve pre-built HTML.
             // ChatGPT can reach localhost, so it gets Vite HMR.
             const prodBuild = needsProdBuild(
-              (extra?.requestInfo?.headers as Record<string, string | string[] | undefined>) ?? {}
+              Object.fromEntries(extra.http?.req?.headers.entries() ?? [])
             );
             const baseMeta = viteMode && !prodBuild ? injectViteCSP(resourceMeta) : resourceMeta;
             const resolvedMeta = injectResolvedDomain(baseMeta, clientName) ?? baseMeta;
@@ -406,13 +403,13 @@ export function createAppServer(
 
       // Register the tool using ext-apps helper (normalizes ui/resourceUri metadata).
       // Capture the returned RegisteredTool handle for metadata updates on rebuild.
-      // Use the tool's actual Zod schema (raw shape) when available so that
+      // Use the tool's actual Zod schema when available so that
       // tools/list returns real parameter definitions. The MCP SDK duck-types
-      // Zod values (checks for parse/safeParse), so raw shapes from Vite SSR
+      // Zod values (checks for parse/safeParse), so schemas from Vite SSR
       // work across module instances. Fall back to z.object({}).passthrough()
       // for tools that don't export a schema.
       const toolInputSchema = simulation.inputSchema
-        ? makeSchemaOptional(simulation.inputSchema as Record<string, unknown>)
+        ? z.object(makeSchemaOptional(simulation.inputSchema as Record<string, unknown>))
         : z.object({}).passthrough();
       const fullToolMeta = {
         ...toolMeta,
@@ -431,7 +428,11 @@ export function createAppServer(
         {
           description: tool.description as string | undefined,
           inputSchema: toolInputSchema,
-          ...(simulation.outputSchema ? { outputSchema: simulation.outputSchema } : {}),
+          ...(simulation.outputSchema
+            ? {
+                outputSchema: z.object(simulation.outputSchema as z.ZodRawShape),
+              }
+            : {}),
           annotations: tool.annotations as Record<string, unknown> | undefined,
           _meta: fullToolMeta,
         },
@@ -443,7 +444,7 @@ export function createAppServer(
           // real handler. Otherwise, prefer simulation mock data for UI tools so
           // external hosts get predictable fixture results. Backend-only tools
           // always use handlers.
-          const hasMockResult = toolResult?.structuredContent != null;
+          const hasMockResult = toolResult !== undefined;
           const realHandler = simulation.handler;
           const useLiveHandler = realHandler && (config.prodTools || !hasMockResult);
 
@@ -488,14 +489,13 @@ export function createAppServer(
           );
 
           return {
-            content: [
+            content: toolResult?.content ?? [
               {
                 type: 'text' as const,
                 text: `Rendered ${tool.description}!`,
               },
             ],
-            structuredContent:
-              (toolResult?.structuredContent as Record<string, unknown>) ?? undefined,
+            ...toolResult,
           };
         }
       );
@@ -514,9 +514,11 @@ export function createAppServer(
       const plainToolConfig: Record<string, unknown> = {
         description: tool.description as string | undefined,
         inputSchema: simulation.inputSchema
-          ? makeSchemaOptional(simulation.inputSchema as Record<string, unknown>)
+          ? z.object(makeSchemaOptional(simulation.inputSchema as Record<string, unknown>))
           : z.object({}).passthrough(),
-        ...(simulation.outputSchema ? { outputSchema: simulation.outputSchema } : {}),
+        ...(simulation.outputSchema
+          ? { outputSchema: z.object(simulation.outputSchema as z.ZodRawShape) }
+          : {}),
         annotations: tool.annotations as Record<string, unknown> | undefined,
         _meta: toolMeta,
       };
@@ -551,14 +553,13 @@ export function createAppServer(
 
           // Fallback: mock response from simulation data
           return {
-            content: [
+            content: toolResult?.content ?? [
               {
                 type: 'text' as const,
                 text: `Called ${tool.description}!`,
               },
             ],
-            structuredContent:
-              (toolResult?.structuredContent as Record<string, unknown>) ?? undefined,
+            ...toolResult,
           };
         }
       );
@@ -576,7 +577,7 @@ export function createAppServer(
 
 type SessionRecord = {
   server: McpServer;
-  transport: StreamableHTTPServerTransport;
+  transport: NodeStreamableHTTPServerTransport;
   /** True for localhost connections (ChatGPT, inspector) — they use Vite HMR. */
   isLocal: boolean;
   lastActivity: number;
@@ -840,7 +841,7 @@ async function handleMcpRequest(
   if (req.method === 'POST') {
     const isLocal = isLocalConnection(req);
     const { server, resourceHandles, toolHandles } = createAppServer(config, simulations, viteMode);
-    const transport = new StreamableHTTPServerTransport({
+    const transport = new NodeStreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
         sessions.set(id, {

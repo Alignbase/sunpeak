@@ -4,7 +4,7 @@ import type {
   AppToolCallback,
   StandardSchemaV1,
 } from '@modelcontextprotocol/ext-apps';
-import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
+import type { ToolAnnotations } from '@modelcontextprotocol/client';
 import { useApp } from './use-app';
 
 export interface RegisterToolConfig {

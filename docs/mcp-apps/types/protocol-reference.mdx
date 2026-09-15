@@ -8,8 +8,8 @@ keywords: ["MCP Apps", "ChatGPT Apps", "protocol reference", "request types", "n
 <Badge color="green">MCP Apps SDK</Badge>
 
 <Note>
-  This reference covers MCP Apps SDK v1.7.5, which sunpeak 0.20.x uses. Version 2.0 keeps the
-  same View protocol but changes peer packages, deprecates the union types below, and broadens
+  This reference covers MCP Apps SDK v2.0.0, which current sunpeak releases use. Version 2.0 keeps
+  the same View protocol, uses split peer packages, deprecates the union types below, and broadens
   some core schemas. See the [SDK 2.0 migration guide](/mcp-apps/sdk-v2-migration).
 </Note>
 
@@ -86,7 +86,7 @@ import type {
 
 ### Proxied Requests
 
-The host proxies select MCP requests between the View and the originating MCP server (or, for sampling, between the View and the host's LLM). These reuse standard MCP request/result types from `@modelcontextprotocol/sdk`.
+The host proxies select MCP requests between the View and the originating MCP server (or, for sampling, between the View and the host's LLM). These reuse standard MCP request/result types from `@modelcontextprotocol/client` in View and Host code, or `@modelcontextprotocol/server` in server code.
 
 | Type | Method | Direction | Description |
 |------|--------|-----------|-------------|

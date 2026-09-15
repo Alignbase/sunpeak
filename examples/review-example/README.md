@@ -130,6 +130,8 @@ dist/
 
 `pnpm start` loads the compiled tools and resources, then starts a production MCP server with real handlers, Zod input validation, and optional auth.
 
+Tool handlers receive the MCP SDK 2.0 context through `ToolHandlerExtra`. Request data is under `extra.mcpReq`, and validated HTTP auth is under `extra.http?.authInfo`.
+
 ```bash
 pnpm start -- --port 3000              # Custom port (default: 8000)
 pnpm start -- --host 127.0.0.1         # Bind to localhost only

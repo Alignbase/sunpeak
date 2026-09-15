@@ -32,7 +32,7 @@ server.registerTool(
   {
     title: 'Search Tickets',
     description: 'Search support tickets.',
-    inputSchema: { query: z.string() },
+    inputSchema: z.object({ query: z.string() }),
     annotations: {
       readOnlyHint: true,
       openWorldHint: false,
@@ -79,10 +79,10 @@ const TicketSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']),
 });
 
-const SearchTicketsOutputSchema = {
+const SearchTicketsOutputSchema = z.object({
   query: z.string(),
   tickets: z.array(TicketSchema),
-};
+});
 ```
 
 Use `content` for a short readable summary and `structuredContent` for model-safe UI data:
@@ -163,7 +163,7 @@ registerAppTool(
   {
     title: 'Search Tickets',
     description: 'Search support tickets and display the results.',
-    inputSchema: { query: z.string() },
+    inputSchema: z.object({ query: z.string() }),
     outputSchema: SearchTicketsOutputSchema,
     annotations: {
       readOnlyHint: true,
@@ -228,10 +228,10 @@ registerAppTool(
   {
     title: 'Load Next Ticket Page',
     description: 'Load another page of tickets for the app UI.',
-    inputSchema: {
+    inputSchema: z.object({
       query: z.string(),
       cursor: z.string(),
-    },
+    }),
     outputSchema: SearchTicketsOutputSchema,
     annotations: {
       readOnlyHint: true,

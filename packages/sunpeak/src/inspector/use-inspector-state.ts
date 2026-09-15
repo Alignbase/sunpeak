@@ -5,7 +5,7 @@ import type {
   McpUiTheme,
   McpUiResourcePermissions,
 } from '@modelcontextprotocol/ext-apps';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/client';
 import type { Simulation } from '../types/simulation';
 import type { ScreenWidth } from './inspector-types';
 import type { HostId } from './hosts';
@@ -128,7 +128,7 @@ export interface InspectorState {
   commitJSON: (
     json: string,
     setError: (error: string) => void,
-    updateFn: (value: Record<string, unknown> | null) => void
+    updateFn: (value: unknown) => void
   ) => void;
 
   // ── Content width (from conversation ResizeObserver) ──
@@ -928,7 +928,9 @@ export function useInspectorState({
   };
 
   const handleUpdateModelContext = (content: unknown[], structuredContent?: unknown) => {
-    setModelContextJson(JSON.stringify(structuredContent ?? content, null, 2));
+    setModelContextJson(
+      JSON.stringify(structuredContent !== undefined ? structuredContent : content, null, 2)
+    );
     setModelAppContext(
       structuredContent === undefined && content.length === 0
         ? null
@@ -958,7 +960,7 @@ export function useInspectorState({
   const commitJSON = (
     json: string,
     setError: (error: string) => void,
-    updateFn: (value: Record<string, unknown> | null) => void
+    updateFn: (value: unknown) => void
   ) => {
     try {
       const parsed = json.trim() === '' ? null : JSON.parse(json);

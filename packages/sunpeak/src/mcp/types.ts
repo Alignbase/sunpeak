@@ -1,16 +1,8 @@
-import type {
-  Resource,
-  Tool,
-  Implementation,
-  ServerRequest,
-  ServerNotification,
-} from '@modelcontextprotocol/sdk/types.js';
-import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
+import type { Resource, Tool, Implementation, ServerContext } from '@modelcontextprotocol/server';
 import type { ToolConfig } from '@modelcontextprotocol/ext-apps/server';
 import type { ServerToolMock } from '../types/simulation';
 
-export type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-export type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+export type { CallToolResult, AuthInfo } from '@modelcontextprotocol/server';
 
 /**
  * Server identity configuration, exported from `src/server.ts` as `server`.
@@ -62,12 +54,12 @@ export type ServerConfig = Partial<Implementation> & {
 /**
  * Extra context passed to tool handlers as the second argument.
  *
- * This is a pre-applied alias for the MCP SDK's `RequestHandlerExtra` —
- * no custom fields, just ergonomic generics so users don't need to parameterize it.
+ * This is an alias for the MCP SDK's server handler context.
  *
- * Key fields: `authInfo`, `sessionId`, `signal`, `_meta`.
+ * Key fields: `sessionId`, `mcpReq`, and `http`. Request IDs, cancellation,
+ * and metadata are under `mcpReq`; validated auth is under `http.authInfo`.
  */
-export type ToolHandlerExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
+export type ToolHandlerExtra = ServerContext;
 
 /**
  * Configuration for a Sunpeak tool file's `tool` export.
@@ -109,13 +101,14 @@ export interface SimulationWithDist {
   };
 
   // Raw Zod shape (Record<string, ZodType>) from the tool module's `schema` export.
-  // Passed to the MCP SDK's registerTool so that tools/list reports actual
+  // Wrapped with z.object() before registration so tools/list reports actual
   // parameter schemas instead of empty objects. The MCP SDK duck-types
-  // Zod values, so raw shapes from Vite SSR work across module instances.
+  // Zod values, so shapes from Vite SSR work across module instances.
   // Falls back to z.object({}).passthrough() when absent.
   inputSchema?: unknown;
 
   // Output schema Zod shape from the tool module's `outputSchema` export.
+  // Wrapped with z.object() before registration.
   // Typed as `unknown` because it's loaded dynamically via Vite SSR —
   // at runtime it will be a Zod shape (Record<string, ZodType>).
   outputSchema?: unknown;

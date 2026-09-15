@@ -161,6 +161,21 @@ describe('useInspectorState', () => {
     });
   });
 
+  it('preserves explicit null structured model context', () => {
+    const simulations = { 'ui-tool': createSim('ui-tool', true) };
+    const { result } = renderHook(() => useInspectorState({ simulations }));
+
+    act(() => {
+      result.current.handleUpdateModelContext([{ type: 'text', text: 'fallback' }], null);
+    });
+
+    expect(result.current.modelContextJson).toBe('null');
+    expect(result.current.modelAppContext).toEqual({
+      content: [{ type: 'text', text: 'fallback' }],
+      structuredContent: null,
+    });
+  });
+
   it('clears model context when the app writes empty content', () => {
     const simulations = { 'ui-tool': createSim('ui-tool', true) };
     const { result } = renderHook(() => useInspectorState({ simulations }));

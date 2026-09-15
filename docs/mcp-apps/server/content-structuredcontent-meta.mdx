@@ -93,7 +93,7 @@ registerAppTool(
   'load-order-detail',
   {
     description: 'Load private order detail for the current app view.',
-    inputSchema: { orderId: z.string() },
+    inputSchema: z.object({ orderId: z.string() }),
     _meta: { ui: { visibility: ['app'] } },
   },
   async ({ orderId }) => {

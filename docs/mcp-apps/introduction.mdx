@@ -16,10 +16,10 @@ keywords:
 ---
 
 <Note>
-  This API reference matches MCP Apps SDK v1.7.5, which sunpeak 0.20.x uses. The upstream
-  `@modelcontextprotocol/ext-apps` latest release is 2.0.0. Its iframe wire protocol is compatible,
-  but its dependencies and some TypeScript APIs changed. See the [SDK 2.0 migration
-  guide](/mcp-apps/sdk-v2-migration) before upgrading a standalone app.
+  This API reference matches MCP Apps SDK v2.0.0, which current sunpeak releases use. The iframe
+  wire protocol is compatible with 1.x Views and Hosts, but dependencies and some TypeScript APIs
+  changed. See the [SDK 2.0 migration guide](/mcp-apps/sdk-v2-migration) when upgrading an older
+  standalone app or sunpeak integration.
 </Note>
 
 ## What are MCP Apps?
@@ -142,4 +142,4 @@ If you are wiring the server side from scratch, start with [Build an MCP App Ser
 
 If you already have OpenAI Apps SDK code, use [Migrate from OpenAI Apps SDK to MCP Apps](/mcp-apps/server/migrate-openai-apps) to map `openai/outputTemplate`, `text/html+skybridge`, `widgetCSP`, and `window.openai` APIs to MCP Apps equivalents.
 
-If you maintain a standalone MCP App on `@modelcontextprotocol/ext-apps` 1.x, use the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) for package, schema, handler, and error changes. sunpeak 0.20.x projects should stay on the framework-managed 1.7.5 SDK until sunpeak adopts the split MCP 2.x packages.
+If you maintain a standalone MCP App on `@modelcontextprotocol/ext-apps` 1.x, use the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) for package, schema, handler, and error changes. Current sunpeak releases already manage the split MCP 2.x packages for framework projects.

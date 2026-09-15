@@ -5,13 +5,13 @@ import { gzipSync } from 'node:zlib';
 
 import { FAVICON_BUFFER, FAVICON_DATA_URI } from './favicon.js';
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import { McpServer, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
 import {
   registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from '@modelcontextprotocol/ext-apps/server';
+import { z } from 'zod';
 import { injectResolvedDomain, injectDefaultDomain } from './resolve-domain.js';
 
 import type { AuthInfo, CallToolResult, ServerConfig, ToolHandlerExtra } from './types.js';
@@ -77,9 +77,9 @@ export interface ProductionTool {
     annotations?: Record<string, unknown>;
     _meta?: Record<string, unknown>;
   };
-  /** Zod shape from the `schema` export (passed to SDK as inputSchema) */
+  /** Zod shape from the `schema` export (wrapped with `z.object()` for the SDK) */
   schema?: Record<string, unknown>;
-  /** Zod shape from the `outputSchema` export (passed to SDK as outputSchema) */
+  /** Zod shape from the `outputSchema` export (wrapped with `z.object()` for the SDK) */
   outputSchema?: Record<string, unknown>;
   /** Handler from the `default` export */
   handler: (
@@ -186,7 +186,7 @@ export interface ProductionServerConfig {
   tools: ProductionTool[];
   /** Resource registrations with pre-built HTML */
   resources: ProductionResource[];
-  /** Auth function from server entry (populates extra.authInfo via req.auth) */
+  /** Auth function from server entry (populates extra.http.authInfo via req.auth) */
   auth?: AuthFunction;
   /** OAuth protected-resource discovery and bearer challenge configuration. */
   oauth?: OAuthProtectedResourceConfig;
@@ -540,8 +540,10 @@ export function createProductionMcpServer(config: ProductionServerConfig): McpSe
         title: tool.tool.title,
         description: tool.tool.description,
         annotations: tool.tool.annotations,
-        ...(tool.schema ? { inputSchema: tool.schema } : {}),
-        ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+        ...(tool.schema ? { inputSchema: z.object(tool.schema as z.ZodRawShape) } : {}),
+        ...(tool.outputSchema
+          ? { outputSchema: z.object(tool.outputSchema as z.ZodRawShape) }
+          : {}),
         _meta: {
           ...tool.tool._meta,
           ui: {
@@ -565,8 +567,10 @@ export function createProductionMcpServer(config: ProductionServerConfig): McpSe
         description: tool.tool.description,
         annotations: tool.tool.annotations,
         _meta: tool.tool._meta,
-        ...(tool.schema ? { inputSchema: tool.schema } : {}),
-        ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+        ...(tool.schema ? { inputSchema: z.object(tool.schema as z.ZodRawShape) } : {}),
+        ...(tool.outputSchema
+          ? { outputSchema: z.object(tool.outputSchema as z.ZodRawShape) }
+          : {}),
       };
       mcpServer.registerTool(tool.name, toolConfig, async (...args: unknown[]) => {
         if (tool.schema) {

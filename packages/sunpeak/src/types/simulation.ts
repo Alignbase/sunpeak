@@ -4,7 +4,7 @@
  * the dev inspector and MCP server contexts.
  */
 
-import type { Tool, Resource, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool, Resource, CallToolResult } from '@modelcontextprotocol/client';
 import type { McpUiHostContext } from '@modelcontextprotocol/ext-apps';
 
 /**

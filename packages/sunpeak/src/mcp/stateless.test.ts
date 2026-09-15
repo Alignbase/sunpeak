@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { createHandler, createMcpHandler, detectClientFromHeaders } from './production-server.js';
 import type { WebHandlerConfig, ProductionServerConfig } from './production-server.js';
+import type { ToolHandlerExtra } from './types.js';
 
 // Minimal config for tests — no real tools or resources needed for transport-level behavior
 const baseWebConfig: WebHandlerConfig = {
@@ -136,6 +137,25 @@ describe('createHandler stateless mode', () => {
     expect(body.result.content[0].text).toBe('hello world');
   });
 
+  it('wraps non-object structured content for the legacy transport', async () => {
+    const handler = createHandler({
+      ...baseWebConfig,
+      tools: [
+        {
+          name: 'array-result',
+          tool: { description: 'Return an array result' },
+          handler: () => ({ content: [], structuredContent: ['alpha', 'beta'] }),
+        },
+      ],
+    });
+
+    const res = await handler(makePostRequest(jsonRpcBody('tools/call', { name: 'array-result' })));
+    const body = await res.json();
+
+    expect(body.error).toBeUndefined();
+    expect(body.result.structuredContent).toEqual({ result: ['alpha', 'beta'] });
+  });
+
   it('returns 401 when auth rejects', async () => {
     const handler = createHandler({
       ...baseWebConfig,
@@ -144,6 +164,33 @@ describe('createHandler stateless mode', () => {
     const req = makePostRequest(initializeBody());
     const res = await handler(req);
     expect(res.status).toBe(401);
+  });
+
+  it('passes SDK 2 request and HTTP auth context to tool handlers', async () => {
+    let observed: ToolHandlerExtra | undefined;
+    const handler = createHandler({
+      ...configWithTool,
+      auth: () => ({ token: 'test-token', clientId: 'test-client', scopes: ['read'] }),
+      tools: [
+        {
+          name: 'context-tool',
+          tool: { description: 'Inspect handler context' },
+          handler: (_args, extra) => {
+            observed = extra;
+            return 'context received';
+          },
+        },
+      ],
+    });
+
+    const res = await handler(makePostRequest(jsonRpcBody('tools/call', { name: 'context-tool' })));
+
+    expect(res.status).toBe(200);
+    expect(observed?.mcpReq.method).toBe('tools/call');
+    expect(observed?.mcpReq.id).toBe(1);
+    expect(observed?.mcpReq.signal).toBeInstanceOf(AbortSignal);
+    expect(observed?.http?.authInfo?.token).toBe('test-token');
+    expect(observed?.http?.req?.url).toBe('http://localhost:8000/mcp');
   });
 
   it('returns 400 for invalid JSON body', async () => {

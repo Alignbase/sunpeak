@@ -23,18 +23,18 @@ Those are separate protocol layers, so updating an MCP server does not remove th
 
 ## Version Status
 
-| Layer | Current standard | sunpeak 0.20.x |
+| Layer | Current standard | Current sunpeak |
 | --- | --- | --- |
-| Host ↔ MCP server | Core MCP `2026-07-28` | Core MCP `2025-11-25` through `@modelcontextprotocol/sdk` v1.30 |
-| View ↔ Host | MCP Apps `2026-01-26` | MCP Apps `2026-01-26` through `@modelcontextprotocol/ext-apps` v1.7.5 |
+| Host ↔ MCP server | Core MCP `2026-07-28` | Core MCP `2025-11-25` through the SDK 2.0 legacy compatibility transport |
+| View ↔ Host | MCP Apps `2026-01-26` | MCP Apps `2026-01-26` through `@modelcontextprotocol/ext-apps` v2.0 |
 
 <Warning>
-  sunpeak's `--stateless` option creates a fresh v1 MCP server for each HTTP request, but it does
+  sunpeak's `--stateless` option creates a fresh MCP server for each HTTP request, but it does
   not enable the `2026-07-28` wire protocol. A server can be stateless at the application or
   transport layer while still speaking the handshake-based `2025-11-25` revision.
 </Warning>
 
-The MCP TypeScript SDK implements the 2026 revision in its v2 API. `@modelcontextprotocol/ext-apps@2.0.0` uses those split v2 packages, but sunpeak 0.20.x still uses ext-apps 1.7.5 and the monolithic v1 MCP SDK. Do not upgrade either package independently in a sunpeak project. See the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) for the standalone SDK boundary.
+The MCP TypeScript SDK implements the 2026 revision in its v2 API, and `@modelcontextprotocol/ext-apps@2.0.0` uses those split packages. Current sunpeak releases use the same 2.0 package line for their Views, inspector client, and server helpers. The framework's public HTTP wrappers still use the SDK's legacy Streamable HTTP transport, so a separate server-routing change is required before sunpeak can advertise the modern wire protocol. See the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) for package and TypeScript API changes.
 
 ## What Changed in Core MCP
 
@@ -107,15 +107,15 @@ Tool-to-View linkage does not change. A UI tool still points to a `ui://` resour
 
 ## Compatibility Matrix
 
-| MCP server | sunpeak 0.20.x inspector and test client | 2026-capable Host |
+| MCP server | sunpeak inspector and test client | 2026-capable Host |
 | --- | --- | --- |
-| Legacy `2025-11-25` | Supported | Supported when the Host can fall back to the legacy era |
-| Dual-era | Supported through the legacy path | Supported through the 2026 path or legacy fallback |
-| Modern-only `2026-07-28` | Not supported | Supported |
+| Legacy `2025-11-25` | Supported through automatic fallback | Supported when the Host can fall back to the legacy era |
+| Dual-era | Supported through the 2026 path or legacy fallback | Supported through the 2026 path or legacy fallback |
+| Modern-only `2026-07-28` | Supported | Supported |
 
-A modern-only server should return a clear error when a legacy client sends `initialize`, because a legacy client has no way to negotiate forward.
+The sunpeak inspector and test client now use the SDK 2.0 client's automatic version negotiation. A modern-only server should still return a clear error when a separate legacy client sends `initialize`, because that client has no way to negotiate forward.
 
-## Prepare a sunpeak App for a Future Upgrade
+## Prepare a sunpeak App for the Modern Wire Protocol
 
 You do not need to change View code for the new core revision. On the server side:
 

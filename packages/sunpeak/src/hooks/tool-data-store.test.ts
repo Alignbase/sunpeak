@@ -94,6 +94,20 @@ describe('initToolDataStore', () => {
     expect(store.data.output).toEqual({ ok: true });
   });
 
+  it('preserves explicit null structured content instead of falling back to content', () => {
+    const app = fakeApp();
+    const store = initToolDataStore(app);
+
+    app.emit('toolresult', {
+      structuredContent: null,
+      content: [{ type: 'text', text: 'fallback' }],
+      isError: false,
+    });
+
+    expect(store.data.output).toBeNull();
+    expect(store.data.isLoading).toBe(false);
+  });
+
   it('marks the store as cancelled with the reason from ontoolcancelled', () => {
     const app = fakeApp();
     const store = initToolDataStore(app);

@@ -305,7 +305,7 @@ When sunpeak package APIs change (new hooks, new features, deprecations, etc.), 
 ## Upgrading Dependencies
 
 ### General Process
-1. Update `packages/sunpeak/package.json` and `packages/sunpeak/template/package.json`
+1. Update `packages/sunpeak/package.json` and any direct MCP dependencies in workspace packages
 2. Run `pnpm install` from monorepo root
 3. Verify: `pnpm --filter sunpeak typecheck && pnpm --filter sunpeak lint && pnpm --filter sunpeak test -- --run && pnpm --filter sunpeak build`
 4. Regenerate examples: `pnpm --filter sunpeak generate-examples`
@@ -324,6 +324,8 @@ This is the upstream SDK that sunpeak wraps. Upgrades often introduce new `App` 
 5. **Update docs version note** — Bump the SDK version in `docs/mcp-apps/introduction.mdx` and `docs/mcp-apps/types/protocol-reference.mdx`.
 6. **Check for deprecations** — If new generic APIs supersede platform-specific hooks, remove the old hook and its docs.
 7. **Update `requests.mdx`** — Add sections for new `App` methods in `docs/mcp-apps/app/requests.mdx` and update the `<Note>` listing convenience hooks.
+8. **Keep split SDK packages aligned** — ext-apps 2.x requires the MCP 2.x client and Zod 4.2+. Server helpers also require `@modelcontextprotocol/server`; Node HTTP transport uses `@modelcontextprotocol/node`; runtime protocol schemas come from `@modelcontextprotocol/core`. Do not reintroduce the monolithic `@modelcontextprotocol/sdk`.
+9. **Migrate breaking surfaces** — Wrap raw Zod shapes with `z.object()`, move request fields under `extra.mcpReq`, read HTTP auth from `extra.http?.authInfo`, and remove uses of the deleted `ProtocolWithEvents` class.
 
 ### SDK Export Structure
 

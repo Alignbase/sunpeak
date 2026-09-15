@@ -24,9 +24,10 @@ import { lookup as dnsLookup } from 'node:dns/promises';
 import { createServer as createHttpServer } from 'http';
 import { isIP } from 'node:net';
 import { homedir } from 'node:os';
-import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js';
-import { OAuthProtectedResourceMetadataSchema } from '@modelcontextprotocol/sdk/shared/auth.js';
+import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/client';
+import { OAuthProtectedResourceMetadataSchema } from '@modelcontextprotocol/core';
 import { getPort } from '../lib/get-port.mjs';
+import { getMcpClientOptions } from '../lib/mcp-client-options.mjs';
 import { startSandboxServer } from '../lib/sandbox-server.mjs';
 import { getDevOverlayScript } from '../lib/dev-overlay.mjs';
 
@@ -148,7 +149,7 @@ function hasAuthorizationHeader(headers) {
  *
  * @param {string} redirectUrl - The callback URL for OAuth redirects
  * @param {{ clientId?: string, clientSecret?: string, clientMetadataUrl?: string, tokenEndpointAuthMethod?: 'client_secret_basic' | 'client_secret_post' | 'none', applicationType?: 'native' | 'web', scope?: string, authorizationServer?: string }} [opts]
- * @returns {{ provider: import('@modelcontextprotocol/sdk/client/auth.js').OAuthClientProvider, getAuthUrl: () => URL | undefined }}
+ * @returns {{ provider: import('@modelcontextprotocol/client').OAuthClientProvider, getAuthUrl: () => URL | undefined }}
  */
 function createInMemoryOAuthProvider(redirectUrl, opts = {}) {
   let _authUrl;
@@ -554,7 +555,7 @@ async function configureOAuthAuthorizationServer(oauthState, authorizationServer
     throw new Error('Selected OAuth authorization server is not advertised by the resource');
   }
   const { discoverAuthorizationServerMetadata } =
-    await import('@modelcontextprotocol/sdk/client/auth.js');
+    await import('@modelcontextprotocol/client');
   const metadata = await discoverAuthorizationServerMetadata(authorizationServer, { fetchFn });
   oauthState.selectAuthorizationServer(authorizationServer);
   await oauthState.provider.saveDiscoveryState({
@@ -721,10 +722,10 @@ export async function resolveMcpResourceMetadataUrl(serverUrl, fetchFn = fetch) 
  *    and waits for the callback.
  *
  * @param {string} serverUrl - The MCP server URL
- * @returns {Promise<import('@modelcontextprotocol/sdk/client/auth.js').OAuthClientProvider>}
+ * @returns {Promise<import('@modelcontextprotocol/client').OAuthClientProvider>}
  */
 async function negotiateOAuth(serverUrl) {
-  const { auth } = await import('@modelcontextprotocol/sdk/client/auth.js');
+  const { auth } = await import('@modelcontextprotocol/client');
 
   // Start a temporary callback server for receiving the OAuth code.
   const callbackPort = await getPort(24681);
@@ -1255,14 +1256,15 @@ async function resolveHttpRedirectsForMcp(
 /**
  * Create an MCP client connection.
  * @param {string} serverArg - URL or command string
- * @param {{ type?: 'none' | 'bearer' | 'oauth', bearerToken?: string, authProvider?: import('@modelcontextprotocol/sdk/client/auth.js').OAuthClientProvider, headers?: Record<string, string>, env?: Record<string, string>, cwd?: string, enforcePublicHttpUrl?: boolean }} [authConfig]
- * @returns {Promise<{ client: import('@modelcontextprotocol/sdk/client/index.js').Client, transport: import('@modelcontextprotocol/sdk/types.js').Transport, serverUrl?: string, stderrOutput?: string[] }>}
+ * @param {{ type?: 'none' | 'bearer' | 'oauth', bearerToken?: string, authProvider?: import('@modelcontextprotocol/client').OAuthClientProvider, headers?: Record<string, string>, env?: Record<string, string>, cwd?: string, enforcePublicHttpUrl?: boolean }} [authConfig]
+ * @returns {Promise<{ client: import('@modelcontextprotocol/client').Client, transport: import('@modelcontextprotocol/client').Transport, serverUrl?: string, stderrOutput?: string[] }>}
  */
 async function createMcpConnection(serverArg, authConfig) {
-  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+  const { Client } = await import('@modelcontextprotocol/client');
   const client = new Client(
     { name: 'sunpeak-inspector', version: '1.0.0' },
     {
+      ...getMcpClientOptions(serverArg),
       capabilities: {
         extensions: {
           'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] },
@@ -1278,7 +1280,7 @@ async function createMcpConnection(serverArg, authConfig) {
 
     // HTTP/SSE transport
     const { StreamableHTTPClientTransport } =
-      await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+      await import('@modelcontextprotocol/client');
 
     const requestHeaders = { ...(authConfig?.headers ?? {}) };
     if (authConfig?.type === 'bearer' && authConfig.bearerToken) {
@@ -1326,7 +1328,7 @@ async function createMcpConnection(serverArg, authConfig) {
     const parts = serverArg.split(/\s+/);
     const command = parts[0];
     const cmdArgs = parts.slice(1);
-    const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
+    const { StdioClientTransport } = await import('@modelcontextprotocol/client/stdio');
 
     const transportOpts = {
       command,
@@ -1389,7 +1391,7 @@ function defaultLiveMcpServerUrl(serverUrl) {
 
 /**
  * Discover tools and resources from the MCP server and build Simulation objects.
- * @param {import('@modelcontextprotocol/sdk/client/index.js').Client} client
+ * @param {import('@modelcontextprotocol/client').Client} client
  * @returns {Promise<Record<string, object>>} Map of simulation name → Simulation-shaped objects
  */
 async function discoverSimulations(client) {
@@ -2419,8 +2421,8 @@ root.render(
 
 /**
  * Vite plugin for MCP server proxy endpoints.
- * @param {() => import('@modelcontextprotocol/sdk/client/index.js').Client} getClient
- * @param {(client: import('@modelcontextprotocol/sdk/client/index.js').Client) => void} setClient
+ * @param {() => import('@modelcontextprotocol/client').Client} getClient
+ * @param {(client: import('@modelcontextprotocol/client').Client) => void} setClient
  * @param {{ callToolDirect?: (name: string, args: Record<string, unknown>) => Promise<object>, simulationsDir?: string | null, serverUrl?: string, liveServerUrl?: string, requestToken?: string }} [pluginOpts]
  */
 function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
@@ -3172,7 +3174,7 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
               // endpoint-specific well-known path. Keep the root fallback for
               // that compatibility case when no challenge URL was captured.
               const resourceMetadataUrl = await resolveMcpResourceMetadataUrl(serverUrl);
-              const { auth } = await import('@modelcontextprotocol/sdk/client/auth.js');
+              const { auth } = await import('@modelcontextprotocol/client');
               await auth(oauthState.provider, {
                 serverUrl,
                 scope,
@@ -3405,7 +3407,7 @@ function sunpeakInspectEndpointsPlugin(getClient, setClient, pluginOpts = {}) {
 
         try {
           // Exchange the code for tokens
-          const { auth } = await import('@modelcontextprotocol/sdk/client/auth.js');
+          const { auth } = await import('@modelcontextprotocol/client');
           const result = await auth(oauthState.provider, {
             serverUrl,
             authorizationCode: validatedCode,

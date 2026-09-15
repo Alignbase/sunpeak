@@ -20,6 +20,8 @@ Server-agnostic MCP testing framework and full-stack MCP App framework.
 
 MCP Apps are cross-platform, meaning sunpeak is a ChatGPT App framework, Claude Connector framework, and more.
 
+Current releases use MCP Apps SDK 2.0 and the split MCP TypeScript client, server, core, and Node packages. Projects that read tool handler context directly should use `extra.mcpReq` for request data and `extra.http?.authInfo` for validated HTTP auth.
+
 ChatGPT apps are now submitted and published as plugins. The app remains an MCP-backed app, so sunpeak's architecture and runtime do not change. The plugin is the package used for local installation, review, and public distribution.
 
 ```bash

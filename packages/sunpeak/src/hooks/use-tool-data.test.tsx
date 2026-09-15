@@ -83,6 +83,24 @@ describe('useToolData eager-store integration', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it('preserves explicit null structured content in the lazy store', () => {
+    const app = fakeApp();
+    const { result } = renderHook(() => useToolData(), {
+      wrapper: wrapper(app),
+    });
+
+    act(() => {
+      app.emit('toolresult', {
+        structuredContent: null,
+        content: [{ type: 'text', text: 'fallback' }],
+        isError: false,
+      });
+    });
+
+    expect(result.current.output).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+  });
+
   it('falls back to a lazy WeakMap store when no eager store is attached', () => {
     // App created outside AppProvider — e.g. in tests or direct SDK usage.
     const app = fakeApp();
@@ -117,6 +135,17 @@ describe('useToolData eager-store integration', () => {
 
     expect(result.current.input).toEqual({ q: 'seed' });
     expect(result.current.output).toEqual({ items: ['a'] });
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it.each([false, 0, '', null])('treats falsy default output as loaded: %j', (defaultOutput) => {
+    const app = fakeApp();
+
+    const { result } = renderHook(() => useToolData<unknown, unknown>(undefined, defaultOutput), {
+      wrapper: wrapper(app),
+    });
+
+    expect(result.current.output).toBe(defaultOutput);
     expect(result.current.isLoading).toBe(false);
   });
 

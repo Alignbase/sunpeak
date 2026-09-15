@@ -1,4 +1,4 @@
-import type { Resource } from '@modelcontextprotocol/sdk/types.js';
+import type { Resource } from '@modelcontextprotocol/client';
 import type { McpUiResourceMeta } from '@modelcontextprotocol/ext-apps';
 import type { DomainConfig } from '../mcp/resolve-domain.js';
 

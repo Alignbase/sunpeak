@@ -26,7 +26,7 @@ registerAppTool(
   {
     title: "Refresh Orders",
     description: "Refresh the current order list for the app UI.",
-    inputSchema: { cursor: z.string().optional() },
+    inputSchema: z.object({ cursor: z.string().optional() }),
     _meta: {
       ui: {
         resourceUri: "ui://orders/view.html",
@@ -107,11 +107,11 @@ registerAppTool(
   {
     title: "Read Report Chunk",
     description: "Load report data for the app UI.",
-    inputSchema: {
+    inputSchema: z.object({
       reportId: z.string(),
       offset: z.number().default(0),
       byteCount: z.number().default(500_000),
-    },
+    }),
     outputSchema: ChunkSchema,
     _meta: {
       ui: {

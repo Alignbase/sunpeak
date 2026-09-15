@@ -28,7 +28,7 @@
  * Don't collapse these — the URL-param deep-link path (`?simulation=X`) and
  * the rest of the Inspector code rely on `name` being a stable unique key.
  */
-import type { Resource } from '@modelcontextprotocol/sdk/types.js';
+import type { Resource } from '@modelcontextprotocol/client';
 import type { Simulation } from '../types/simulation';
 import type { InspectorApp, InspectorAppResource } from './app-types';
 

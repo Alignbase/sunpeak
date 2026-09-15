@@ -16,11 +16,7 @@ import { registerAppTool } from '@modelcontextprotocol/ext-apps/server';
 
 `registerAppTool` is a convenience wrapper around the MCP SDK's [`server.registerTool()`](/mcp-apps/mcp/tools) that normalizes [UI metadata](/mcp-apps/introduction#how-are-tools-linked-to-uis) for compatibility across hosts. Use it instead of `registerTool` when your tool should render a View or when it needs MCP App visibility metadata.
 
-<Note>
-  This reference uses the raw Zod shape accepted by SDK 1.7.5. In SDK 2.0, wrap input and output
-  shapes with `z.object()`. The raw shape overload is deprecated. See the [SDK 2.0 migration
-  guide](/mcp-apps/sdk-v2-migration#wrap-tool-schemas-with-zobject).
-</Note>
+Use `z.object()` for input and output schemas. SDK 2.0 still accepts raw Zod shapes, but that overload is deprecated. See the [SDK 2.0 migration guide](/mcp-apps/sdk-v2-migration#wrap-tool-schemas-with-zobject).
 
 ## Signature
 
@@ -52,10 +48,10 @@ function registerAppTool(
   <ResponseField name="description" type="string">
     Tool description for the model.
   </ResponseField>
-  <ResponseField name="inputSchema" type="ZodRawShape | AnySchema">
+  <ResponseField name="inputSchema" type="ZodRawShape | StandardSchemaWithJSON">
     Zod schema or JSON Schema for tool arguments.
   </ResponseField>
-  <ResponseField name="outputSchema" type="ZodRawShape | AnySchema">
+  <ResponseField name="outputSchema" type="ZodRawShape | StandardSchemaWithJSON">
     Zod schema or JSON Schema for tool output.
   </ResponseField>
   <ResponseField name="annotations" type="ToolAnnotations">
@@ -93,7 +89,7 @@ registerAppTool(
   {
     title: 'Get Weather',
     description: 'Get current weather for a location',
-    inputSchema: { location: z.string() },
+    inputSchema: z.object({ location: z.string() }),
     _meta: {
       ui: { resourceUri: 'ui://weather/view.html' },
     },
@@ -119,7 +115,7 @@ registerAppTool(
   {
     title: 'Search Orders',
     description: 'Search orders and display the results.',
-    inputSchema: { query: z.string() },
+    inputSchema: z.object({ query: z.string() }),
     annotations: {
       readOnlyHint: true,
       openWorldHint: false,
@@ -142,7 +138,7 @@ registerAppTool(
   'update-quantity',
   {
     description: 'Update item quantity in cart',
-    inputSchema: { itemId: z.string(), quantity: z.number() },
+    inputSchema: z.object({ itemId: z.string(), quantity: z.number() }),
     _meta: {
       ui: {
         visibility: ['app'],

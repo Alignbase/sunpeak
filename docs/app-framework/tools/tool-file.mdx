@@ -116,7 +116,7 @@ type Args = z.infer<z.ZodObject<typeof schema>>;
 
 export default async function (args: Args, extra: ToolHandlerExtra) {
   // args is typed from your schema
-  // extra has authInfo, sessionId, signal
+  // extra has sessionId, mcpReq, and http
   return { structuredContent: { data: [] } };
 }
 ```
@@ -130,7 +130,7 @@ export default async function (args: Args, extra: ToolHandlerExtra) {
 
 The `extra` parameter provides context from the MCP SDK:
 
-<ResponseField name="authInfo" type="AuthInfo">
+<ResponseField name="http.authInfo" type="AuthInfo">
   Authentication info from the optional `src/server.ts` auth function.
 </ResponseField>
 
@@ -138,8 +138,16 @@ The `extra` parameter provides context from the MCP SDK:
   Unique session identifier.
 </ResponseField>
 
-<ResponseField name="signal" type="AbortSignal">
+<ResponseField name="mcpReq.signal" type="AbortSignal">
   Abort signal for cancellation.
+</ResponseField>
+
+<ResponseField name="mcpReq.id" type="RequestId">
+  JSON-RPC request identifier.
+</ResponseField>
+
+<ResponseField name="mcpReq._meta" type="RequestMeta">
+  Metadata from the current MCP request.
 </ResponseField>
 
 ## Tools Without UI

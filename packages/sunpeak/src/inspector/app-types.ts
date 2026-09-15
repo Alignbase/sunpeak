@@ -10,7 +10,7 @@
  * at runtime, so callers can construct the structure they already have from
  * MCP `listTools` + `listResources` without translating between formats.
  */
-import type { Tool, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool, CallToolResult } from '@modelcontextprotocol/client';
 import type { ServerToolMock } from '../types/simulation';
 
 /** A resource owned by the App. The URI links it to one or more Tools. */

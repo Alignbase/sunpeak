@@ -16,7 +16,7 @@ import type {
   CreateMessageResult,
   CreateMessageResultWithTools,
   LoggingMessageNotification,
-} from '@modelcontextprotocol/sdk/types.js';
+} from '@modelcontextprotocol/client';
 
 const DEFAULT_HOST_INFO = { name: 'SunpeakInspector', version: '1.0.0' };
 

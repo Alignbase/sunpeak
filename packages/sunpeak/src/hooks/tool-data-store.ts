@@ -86,7 +86,7 @@ export function initToolDataStore(app: App): ToolDataStore {
   app.addEventListener('toolresult', (_params) => {
     store.data = {
       ...store.data,
-      output: _params.structuredContent ?? _params.content,
+      output: 'structuredContent' in _params ? _params.structuredContent : _params.content,
       isError: _params.isError ?? false,
       isLoading: false,
     };

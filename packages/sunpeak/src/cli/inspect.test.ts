@@ -1020,7 +1020,7 @@ describe('inspect endpoint security helpers', () => {
     expect(await oauthState.provider.tokens()).not.toHaveProperty('refresh_token');
 
     const oauthRequests: string[] = [];
-    const { auth } = await import('@modelcontextprotocol/sdk/client/auth.js');
+    const { auth } = await import('@modelcontextprotocol/client');
     const result = await auth(oauthState.provider, {
       serverUrl: 'https://mcp.example.com/mcp',
       resourceMetadataUrl: new URL(

@@ -5,7 +5,7 @@ import type { AuthInfo, ServerConfig } from 'sunpeak/mcp';
  * Optional server entry point.
  *
  * Called on every MCP request. Return AuthInfo to authenticate, null to reject (401).
- * The returned AuthInfo is available as `extra.authInfo` in tool handlers.
+ * The returned AuthInfo is available as `extra.http?.authInfo` in tool handlers.
  */
 export async function auth(req: IncomingMessage): Promise<AuthInfo | null> {
   const token = req.headers.authorization?.replace('Bearer ', '');

@@ -26,9 +26,9 @@ This distinction matters when an app works as a normal MCP tool but its UI does 
 
 | Version              | Example                                               | Where it appears                                      | What it controls                                                    |
 | -------------------- | ----------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------- |
-| Core MCP protocol    | Latest: `2026-07-28`; sunpeak 0.20.x: `2025-11-25`    | Host ↔ MCP server requests                            | Tools, resources, transport, and core MCP capabilities              |
+| Core MCP protocol    | Latest: `2026-07-28`; sunpeak HTTP wrappers: `2025-11-25` | Host ↔ MCP server requests                         | Tools, resources, transport, and core MCP capabilities              |
 | MCP Apps protocol    | `2026-01-26`                                          | View ↔ Host `ui/initialize`                           | View lifecycle, host context, app capabilities, and `ui/*` messages |
-| MCP Apps SDK package | Upstream: `2.0.0`; sunpeak 0.20.x: `1.7.5`           | `package.json`                                        | The implementation, peer dependencies, and TypeScript APIs          |
+| MCP Apps SDK package | `2.0.0`                                               | `package.json`                                        | The implementation, peer dependencies, and TypeScript APIs          |
 | Your app version     | `1.4.0`                                               | `appInfo.version`                                     | Your View's identity, not protocol compatibility                    |
 
 The date-based protocol versions are independent. A Host can support a given core MCP version without supporting MCP Apps, and an MCP Apps-capable Host may expose only some optional View APIs.
@@ -44,7 +44,7 @@ The date-based protocol versions are independent. A Host can support a given cor
 
 A 2.x View can run in a 1.x Host, and a 2.x Host can render a 1.x View. This wire compatibility does not make their TypeScript classes interchangeable, and it does not make the core MCP 1.x and 2.x server APIs interchangeable.
 
-sunpeak 0.20.x uses ext-apps 1.7.5 and the monolithic MCP SDK 1.30. Keep those framework dependencies together. Standalone projects can use the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) to move to the split packages.
+Current sunpeak releases use ext-apps 2.0 with the split client, core, server, and Node SDK packages. sunpeak's existing HTTP server wrappers continue to use the SDK's handshake-based compatibility transport, so adopting the 2.0 TypeScript APIs does not by itself switch those endpoints to the core `2026-07-28` wire protocol. Standalone projects can use the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) to move to the split packages.
 
 ## Two Independent Protocol Layers
 
@@ -54,7 +54,7 @@ sequenceDiagram
     participant H as Host
     participant S as MCP Server
 
-    alt Core MCP 2025-11-25, used by sunpeak 0.20.x
+    alt Core MCP 2025-11-25, used by sunpeak HTTP wrappers
         H->>S: initialize (core MCP protocolVersion)
         S-->>H: negotiated core version and server capabilities
         H->>S: notifications/initialized
@@ -70,7 +70,7 @@ sequenceDiagram
     V->>H: ui/notifications/initialized
 ```
 
-### 1. Host ↔ Server in sunpeak 0.20.x
+### 1. Host ↔ Server in sunpeak
 
 The core MCP `initialize` request negotiates the core protocol version. An MCP Apps Host also advertises the UI extension under `capabilities.extensions`:
 
@@ -96,7 +96,7 @@ The core MCP `initialize` request negotiates the core protocol version. An MCP A
 
 Servers should check this extension before returning MCP Apps metadata. [`getUiCapability()`](/mcp-apps/server/capability-detection) reads the extension without tying your server to a specific Host name.
 
-Core MCP `2026-07-28` removes this handshake and carries the version, identity, and capabilities on each request. sunpeak 0.20.x uses the v1 MCP SDK and does not yet speak that modern wire protocol. See [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28) for the compatibility boundary and migration checklist.
+Core MCP `2026-07-28` removes this handshake and carries the version, identity, and capabilities on each request. sunpeak uses the SDK 2.0 package APIs, while its framework HTTP wrappers still expose the legacy compatibility transport. See [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28) for the compatibility boundary and migration checklist.
 
 ### 2. View ↔ Host
 

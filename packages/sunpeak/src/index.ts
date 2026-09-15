@@ -131,9 +131,6 @@ export type {
   AppEventMap,
 } from '@modelcontextprotocol/ext-apps';
 
-// Event system base class
-export { ProtocolWithEvents } from '@modelcontextprotocol/ext-apps';
-
 // AppBridge event map (host-side)
 export type { AppBridgeEventMap } from '@modelcontextprotocol/ext-apps/app-bridge';
 

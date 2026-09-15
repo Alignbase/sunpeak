@@ -18,9 +18,9 @@ keywords:
 <Badge color="green">MCP Apps SDK</Badge>
 
 <Note>
-  This server example uses the MCP SDK 1.x package used by sunpeak 0.20.x. Standalone projects on
-  ext-apps 2.0 must use the split MCP SDK packages and `z.object()` schemas. See the [SDK 2.0
-  migration guide](/mcp-apps/sdk-v2-migration).
+  This server example uses the split MCP SDK 2.0 packages and `z.object()` schemas used by current
+  sunpeak releases. See the [SDK 2.0 migration guide](/mcp-apps/sdk-v2-migration) when updating a
+  1.x server.
 </Note>
 
 An MCP App server is a normal MCP server with three additions:
@@ -50,7 +50,7 @@ Before you test in a host, confirm these items:
 ## Complete Example
 
 ```ts
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import {
   getUiCapability,
   registerAppResource,
@@ -91,7 +91,7 @@ server.server.oninitialized = () => {
       {
         title: 'Search Orders',
         description: 'Search orders and return a text summary.',
-        inputSchema: { query: z.string() },
+        inputSchema: z.object({ query: z.string() }),
         annotations: {
           readOnlyHint: true,
           openWorldHint: false,
@@ -147,8 +147,8 @@ server.server.oninitialized = () => {
     {
       title: 'Search Orders',
       description: 'Search orders and display the results in an interactive UI.',
-      inputSchema: { query: z.string() },
-      outputSchema: {
+      inputSchema: z.object({ query: z.string() }),
+      outputSchema: z.object({
         query: z.string(),
         orders: z.array(
           z.object({
@@ -158,7 +158,7 @@ server.server.oninitialized = () => {
             status: z.string(),
           })
         ),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -191,7 +191,7 @@ server.server.oninitialized = () => {
     {
       title: 'Refresh Orders',
       description: 'Refresh order data for the app UI.',
-      inputSchema: { query: z.string() },
+      inputSchema: z.object({ query: z.string() }),
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,

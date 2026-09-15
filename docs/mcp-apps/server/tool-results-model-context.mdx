@@ -48,7 +48,7 @@ The first model-called tool should return enough `content` for a non-UI host to 
 ## Return Both Text and Structured Data
 
 ```ts
-const SearchOrdersOutputSchema = {
+const SearchOrdersOutputSchema = z.object({
   query: z.string(),
   orders: z.array(
     z.object({
@@ -58,7 +58,7 @@ const SearchOrdersOutputSchema = {
     })
   ),
   nextCursor: z.string().optional(),
-};
+});
 
 registerAppTool(
   server,
@@ -66,7 +66,7 @@ registerAppTool(
   {
     title: 'Search Orders',
     description: 'Search orders and display the matching results.',
-    inputSchema: { query: z.string() },
+    inputSchema: z.object({ query: z.string() }),
     outputSchema: SearchOrdersOutputSchema,
     annotations: { readOnlyHint: true, openWorldHint: false },
     _meta: {
@@ -166,7 +166,7 @@ registerAppTool(
   {
     title: 'Load Orders Page',
     description: 'Load another page of order results for the app UI.',
-    inputSchema: { cursor: z.string().optional() },
+    inputSchema: z.object({ cursor: z.string().optional() }),
     outputSchema: SearchOrdersOutputSchema,
     _meta: {
       ui: { visibility: ['app'] },

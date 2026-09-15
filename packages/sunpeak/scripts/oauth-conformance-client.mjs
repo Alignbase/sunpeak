@@ -4,7 +4,7 @@
 // against the official MCP conformance runner. The runner appends its MCP URL
 // as the final argument and selects behavior through MCP_CONFORMANCE_*.
 
-import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
+import { auth } from '@modelcontextprotocol/client';
 import { _securityTestExports } from '../bin/commands/inspect.mjs';
 
 const serverUrl = process.argv.at(-1);

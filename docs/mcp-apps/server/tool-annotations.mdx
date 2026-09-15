@@ -54,7 +54,7 @@ registerAppTool(
   {
     title: 'Search Orders',
     description: 'Search orders and display the results.',
-    inputSchema: { query: z.string() },
+    inputSchema: z.object({ query: z.string() }),
     annotations: {
       readOnlyHint: true,
       openWorldHint: false,
@@ -88,7 +88,7 @@ registerAppTool(
   {
     title: 'Save Order Note',
     description: 'Save an order note from the app UI.',
-    inputSchema: { orderId: z.string(), note: z.string() },
+    inputSchema: z.object({ orderId: z.string(), note: z.string() }),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -123,7 +123,7 @@ registerAppTool(
   {
     title: 'Cancel Order',
     description: 'Cancel an order by id.',
-    inputSchema: { orderId: z.string() },
+    inputSchema: z.object({ orderId: z.string() }),
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,

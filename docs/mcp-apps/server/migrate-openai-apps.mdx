@@ -53,7 +53,7 @@ registerAppTool(
   {
     title: 'Show Cart',
     description: 'Display the user cart.',
-    inputSchema: { userId: z.string() },
+    inputSchema: z.object({ userId: z.string() }),
     _meta: {
       ui: {
         resourceUri: 'ui://cart/view.html',
@@ -135,7 +135,7 @@ server.registerTool(
   {
     title: 'Show Cart',
     description: 'Display the user cart.',
-    inputSchema: { userId: z.string() },
+    inputSchema: z.object({ userId: z.string() }),
     annotations: { readOnlyHint: true },
     _meta: {
       'openai/outputTemplate': 'ui://cart/view.html',
@@ -155,7 +155,7 @@ registerAppTool(
   {
     title: 'Show Cart',
     description: 'Display the user cart.',
-    inputSchema: { userId: z.string() },
+    inputSchema: z.object({ userId: z.string() }),
     annotations: { readOnlyHint: true },
     _meta: {
       ui: {

@@ -5,7 +5,7 @@ import { MOCK_OPENAI_RUNTIME_SCRIPT } from './mock-openai-runtime';
 import { generateSandboxProxyHtml } from './sandbox-proxy';
 import { SUNPEAK_INLINE_HELPER_SCRIPT } from './inline-helper-script';
 import type { McpUiHostContext, McpUiResourcePermissions } from '@modelcontextprotocol/ext-apps';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/client';
 
 /**
  * Allowed origins for cross-origin script loading.

@@ -19,14 +19,14 @@ keywords:
 
 `@modelcontextprotocol/ext-apps` 2.0 moves to the split MCP TypeScript SDK 2.0 packages. The stable MCP Apps View protocol stays at `2026-01-26`, so 1.x and 2.x Views and Hosts can communicate over the iframe channel. The breaking changes affect npm dependencies and TypeScript APIs.
 
-<Warning>
-  sunpeak 0.20.x uses `@modelcontextprotocol/ext-apps` 1.7.5 and
-  `@modelcontextprotocol/sdk` 1.30. Do not replace either dependency with 2.0 in a sunpeak
-  project. Use sunpeak's exports and wait for a sunpeak release that adopts the split MCP SDK
-  packages.
-</Warning>
+<Note>
+  Current sunpeak releases use `@modelcontextprotocol/ext-apps` 2.0 and the split MCP SDK 2.0
+  packages. Existing sunpeak projects receive this migration through the framework dependency;
+  update custom server imports and handler context fields only when your own code imports the MCP
+  packages directly or reads `ToolHandlerExtra` fields.
+</Note>
 
-This guide is for standalone MCP Apps and Hosts that import `@modelcontextprotocol/ext-apps` directly, or for teams preparing a future sunpeak upgrade.
+This guide is for standalone MCP Apps and Hosts that import `@modelcontextprotocol/ext-apps` directly, plus sunpeak projects with custom SDK integration code.
 
 ## What Stays Compatible
 
@@ -78,7 +78,7 @@ Then install the packages required by your role:
   </Tab>
 </Tabs>
 
-Version 2 requires Node.js 20 or newer. `@modelcontextprotocol/core` is also a required peer, but package managers install it through `@modelcontextprotocol/client`, so applications do not normally list it directly.
+The MCP SDK packages require Node.js 20 or newer. sunpeak requires Node.js 22.12 or newer because its current build and eval dependencies have a higher minimum. `@modelcontextprotocol/core` is also a required peer, but package managers install it through `@modelcontextprotocol/client`, so applications do not normally list it directly.
 
 The `@modelcontextprotocol/ext-apps/app-with-deps` and `react-with-deps` entry points bundle the client, core, and Zod packages. They need no extra MCP peer installs, but their View bundles are about 25% larger than the 1.x bundled entry points.
 
@@ -197,6 +197,6 @@ Check error classes and codes instead of matching message text.
     Compare the core MCP protocol, MCP Apps protocol, SDK package, and app version.
   </Card>
   <Card title="Protocol Reference" icon="page" href="/mcp-apps/types/protocol-reference">
-    The 1.7.5 types and schemas currently used by sunpeak 0.20.x.
+    The 2.0 types and schemas used by current sunpeak releases.
   </Card>
 </CardGroup>

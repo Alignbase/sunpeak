@@ -1137,6 +1137,30 @@ describe('Inspector', () => {
       expect(screen.getByTestId('tool-result-section')).toBeInTheDocument();
     });
 
+    it.each([false, 0, 'ok', null])(
+      'accepts primitive structured result edits: %j',
+      async (value) => {
+        render(
+          <Inspector
+            simulations={{
+              test: createSim({
+                toolResult: { content: [], structuredContent: { initial: true } },
+              }),
+            }}
+          />
+        );
+        const textarea = screen.getByTestId('tool-result-textarea');
+
+        fireEvent.change(textarea, { target: { value: JSON.stringify(value) } });
+        fireEvent.blur(textarea);
+
+        await waitFor(() => {
+          const data = JSON.parse(document.getElementById('__tool-result')?.textContent || 'null');
+          expect(data.structuredContent).toBe(value);
+        });
+      }
+    );
+
     it('runs backend-only tools and shows results in the sidebar without rendering UI', async () => {
       const onCallTool = vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: 'backend ok' }],

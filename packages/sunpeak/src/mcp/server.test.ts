@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import path from 'node:path';
 import fs from 'node:fs';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createAppServer } from './server.js';
 import type { SimulationWithDist } from './types.js';
 
@@ -122,5 +123,49 @@ describe('createAppServer', () => {
     expect(result.toolHandles).toHaveLength(1);
     expect(result.toolHandles[0].resourceName).toBe('albums');
     expect(result.resourceHandles.has('albums')).toBe(true);
+  });
+
+  it('uses explicit null structured content as a simulation mock', async () => {
+    const handler = vi.fn().mockResolvedValue({ structuredContent: { live: true } });
+    const simulation = {
+      ...makeUiSim('show-albums-null', { structuredContent: null }),
+      handler,
+    };
+    const result = createAppServer({ simulations: [simulation] }, [simulation], false);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'sunpeak-test', version: '1.0.0' });
+
+    await result.server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const response = await client.callTool({ name: 'show-albums', arguments: {} });
+
+    expect(response.structuredContent).toEqual({ result: null });
+    expect(handler).not.toHaveBeenCalled();
+    await client.close();
+    await result.server.close();
+  });
+
+  it('preserves content-only error simulations instead of calling the live handler', async () => {
+    const handler = vi.fn().mockResolvedValue({ structuredContent: { live: true } });
+    const simulation = {
+      ...makeUiSim('show-albums-error', {
+        content: [{ type: 'text', text: 'fixture error' }],
+        isError: true,
+      }),
+      handler,
+    };
+    const result = createAppServer({ simulations: [simulation] }, [simulation], false);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'sunpeak-test', version: '1.0.0' });
+
+    await result.server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const response = await client.callTool({ name: 'show-albums', arguments: {} });
+
+    expect(response.content).toEqual([{ type: 'text', text: 'fixture error' }]);
+    expect(response.isError).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+    await client.close();
+    await result.server.close();
   });
 });

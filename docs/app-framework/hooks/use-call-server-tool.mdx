@@ -48,9 +48,14 @@ function useCallServerTool(): (params: CallServerToolParams) => Promise<CallServ
   Tool response content (human-readable text for the host model).
 </ResponseField>
 
-<ResponseField name="structuredContent" type="Record<string, unknown>">
-  Structured data from the tool response. Use this for machine-readable data the calling resource needs to render (e.g., `{ status: 'success', message: '...' }`).
+<ResponseField name="structuredContent" type="unknown">
+  JSON data from the tool response. Version 2 permits objects, arrays, and primitive JSON values when the tool's output schema allows them.
 </ResponseField>
+
+<Note>
+  sunpeak's handshake-based HTTP server wrappers preserve compatibility with the `2025-11-25`
+  protocol, which represents a non-object structured result as `{ result: value }` on that wire.
+</Note>
 
 <ResponseField name="isError" type="boolean">
   Whether the tool call resulted in an error. Only set for actual execution failures — not for expected outcomes like cancellations.

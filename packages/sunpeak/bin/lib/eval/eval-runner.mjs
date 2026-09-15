@@ -4,6 +4,7 @@
  */
 
 import { resolveModel, checkAiSdkInstalled } from './model-registry.mjs';
+import { getMcpClientOptions } from '../mcp-client-options.mjs';
 
 // Re-export for use in generated test code
 export { checkAiSdkInstalled };
@@ -67,15 +68,18 @@ export function defineEvalConfig(config) {
  * Create an MCP client connection.
  * Reuses the same pattern as inspect.mjs createMcpConnection.
  * @param {string} serverArg - URL or stdio command string
- * @returns {Promise<{ client: import('@modelcontextprotocol/sdk/client/index.js').Client, transport: import('@modelcontextprotocol/sdk/types.js').Transport }>}
+ * @returns {Promise<{ client: import('@modelcontextprotocol/client').Client, transport: import('@modelcontextprotocol/client').Transport }>}
  */
 export async function createMcpConnection(serverArg) {
-  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
-  const client = new Client({ name: 'sunpeak-eval', version: '1.0.0' });
+  const { Client } = await import('@modelcontextprotocol/client');
+  const client = new Client(
+    { name: 'sunpeak-eval', version: '1.0.0' },
+    getMcpClientOptions(serverArg)
+  );
 
   if (serverArg.startsWith('http://') || serverArg.startsWith('https://')) {
     const { StreamableHTTPClientTransport } = await import(
-      '@modelcontextprotocol/sdk/client/streamableHttp.js'
+      '@modelcontextprotocol/client'
     );
     // Follow redirects (e.g. /mcp → /mcp/) before creating the transport.
     let finalUrl = serverArg;
@@ -91,7 +95,7 @@ export async function createMcpConnection(serverArg) {
     const command = parts[0];
     const cmdArgs = parts.slice(1);
     const { StdioClientTransport } = await import(
-      '@modelcontextprotocol/sdk/client/stdio.js'
+      '@modelcontextprotocol/client/stdio'
     );
     const transport = new StdioClientTransport({ command, args: cmdArgs });
     await client.connect(transport);
@@ -101,7 +105,7 @@ export async function createMcpConnection(serverArg) {
 
 /**
  * Discover tools from an MCP server and convert them to AI SDK format.
- * @param {import('@modelcontextprotocol/sdk/client/index.js').Client} client
+ * @param {import('@modelcontextprotocol/client').Client} client
  * @returns {Promise<Record<string, import('ai').CoreTool>>}
  */
 export async function discoverAndConvertTools(client) {
@@ -144,7 +148,7 @@ export async function discoverAndConvertTools(client) {
       execute: async (args) => {
         const result = await client.callTool({ name: t.name, arguments: args });
         // Return a simplified version for the model to consume
-        if (result.structuredContent) {
+        if (result.structuredContent !== undefined) {
           return result.structuredContent;
         }
         if (result.content && result.content.length > 0) {

@@ -827,8 +827,8 @@ async function runScaffoldSmokeTest() {
         // This catches the ai v6 `parameters` → `inputSchema` rename and
         // schema cleanup issues without needing an API key.
         const { discoverAndConvertTools } = await import('../bin/lib/eval/eval-runner.mjs');
-        const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
-        const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+        const { Client, StreamableHTTPClientTransport } =
+          await import('@modelcontextprotocol/client');
         const evalClient = new Client({ name: 'validate-eval-convert', version: '1.0.0' });
         const evalTransport = new StreamableHTTPClientTransport(new URL(mcpUrl));
         await evalClient.connect(evalTransport);

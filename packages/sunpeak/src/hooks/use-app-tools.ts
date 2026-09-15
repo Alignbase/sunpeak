@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/client';
 import { useApp } from './use-app';
 
 export interface AppTool {

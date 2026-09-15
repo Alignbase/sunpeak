@@ -57,7 +57,7 @@ Use UI-launching tools for the actions a user can ask the model to perform, such
 ## Minimal Contract
 
 ```ts
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import {
   registerAppResource,
   registerAppTool,
@@ -99,11 +99,11 @@ registerAppTool(
   {
     title: 'Search Orders',
     description: 'Search orders and display the results.',
-    inputSchema: { query: z.string() },
-    outputSchema: {
+    inputSchema: z.object({ query: z.string() }),
+    outputSchema: z.object({
       query: z.string(),
       orders: z.array(z.object({ id: z.string(), total: z.number() })),
-    },
+    }),
     annotations: {
       readOnlyHint: true,
       openWorldHint: false,
@@ -242,7 +242,7 @@ registerAppTool(
   'refresh-orders',
   {
     description: 'Refresh order data for the app UI.',
-    inputSchema: { query: z.string() },
+    inputSchema: z.object({ query: z.string() }),
     _meta: {
       ui: {
         visibility: ['app'],

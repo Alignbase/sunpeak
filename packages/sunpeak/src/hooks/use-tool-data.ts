@@ -35,9 +35,9 @@ function getStore<TInput, TOutput>(
       data: {
         input: defaultInput ?? null,
         inputPartial: null,
-        output: defaultOutput ?? null,
+        output: defaultOutput === undefined ? null : defaultOutput,
         isError: false,
-        isLoading: !defaultOutput,
+        isLoading: defaultOutput === undefined,
         isCancelled: false,
         cancelReason: null,
       },
@@ -70,7 +70,9 @@ function getStore<TInput, TOutput>(
     app.addEventListener('toolresult', (_params) => {
       lazy.data = {
         ...lazy.data,
-        output: (_params.structuredContent ?? _params.content) as TOutput,
+        output: ('structuredContent' in _params
+          ? _params.structuredContent
+          : _params.content) as TOutput,
         isError: _params.isError ?? false,
         isLoading: false,
       };
@@ -115,9 +117,9 @@ export function useToolData<TInput = unknown, TOutput = unknown>(
     () => ({
       input: defaultInput ?? null,
       inputPartial: null,
-      output: defaultOutput ?? null,
+      output: defaultOutput === undefined ? null : defaultOutput,
       isError: false,
-      isLoading: !defaultOutput,
+      isLoading: defaultOutput === undefined,
       isCancelled: false,
       cancelReason: null,
     }),

@@ -13,12 +13,11 @@ import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
 
 ## Overview
 
-The `App` class provides a framework-agnostic way to build interactive MCP Apps that run inside host applications. In SDK 1.7.5, which sunpeak 0.20.x uses, it extends `ProtocolWithEvents` and handles the connection lifecycle, [initialization handshake](/mcp-apps/lifecycle#2-initialization), and bidirectional communication with the host. The class provides DOM-style `addEventListener()` and `removeEventListener()` methods alongside the traditional `on*` setter properties.
+The `App` class provides a framework-agnostic way to build interactive MCP Apps that run inside host applications. In SDK 2.0, which current sunpeak releases use, it extends the split client SDK's `Protocol` class and handles the connection lifecycle, [initialization handshake](/mcp-apps/lifecycle#2-initialization), and bidirectional communication with the host. The class provides DOM-style `addEventListener()` and `removeEventListener()` methods alongside the traditional `on*` setter properties.
 
 <Note>
-  MCP Apps SDK 2.0 removes the `ProtocolWithEvents` type and extends the split SDK's `Protocol`
-  class directly. The event methods stay available. See the [SDK 2.0 migration
-  guide](/mcp-apps/sdk-v2-migration).
+  MCP Apps SDK 2.0 removed the `ProtocolWithEvents` type. Import `App` or `AppBridge` instead; both
+  keep the event methods. See the [SDK 2.0 migration guide](/mcp-apps/sdk-v2-migration).
 </Note>
 
 ## Constructor

@@ -1,10 +1,54 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck - Eval modules are .mjs files without TypeScript declarations
 import { describe, it, expect, vi } from 'vitest';
+import { resolve } from 'node:path';
 
 const importRunner = () => import('../../bin/lib/eval/eval-runner.mjs');
 const importRegistry = () => import('../../bin/lib/eval/model-registry.mjs');
 const importPlugin = () => import('../../bin/lib/eval/eval-vitest-plugin.mjs');
+
+describe('MCP client options', () => {
+  it('enables modern protocol negotiation with legacy fallback', async () => {
+    const { getMcpClientOptions } = await import('../../bin/lib/mcp-client-options.mjs');
+
+    expect(getMcpClientOptions('https://example.com/mcp')).toEqual({
+      versionNegotiation: { mode: 'auto' },
+    });
+    expect(getMcpClientOptions('node server.mjs')).toEqual({
+      versionNegotiation: { mode: 'auto', probe: { timeoutMs: 3_000 } },
+    });
+  });
+
+  it('falls back promptly when a legacy stdio server ignores discovery', async () => {
+    const { createMcpConnection } = await importRunner();
+    const serverPath = resolve(process.cwd(), 'src/eval/fixtures/silent-legacy-stdio-server.mjs');
+    const startedAt = Date.now();
+    const { client } = await createMcpConnection(`${process.execPath} ${serverPath}`);
+
+    expect(client.getServerVersion()).toMatchObject({ name: 'silent-legacy' });
+    expect(Date.now() - startedAt).toBeLessThan(8_000);
+    await client.close();
+  }, 10_000);
+});
+
+describe('discoverAndConvertTools', () => {
+  it.each([false, 0, '', null])('preserves falsy structured content: %j', async (value) => {
+    const { discoverAndConvertTools } = await importRunner();
+    const client = {
+      listTools: vi.fn().mockResolvedValue({
+        tools: [{ name: 'falsy-result', inputSchema: { type: 'object', properties: {} } }],
+      }),
+      callTool: vi.fn().mockResolvedValue({
+        structuredContent: value,
+        content: [{ type: 'text', text: 'fallback' }],
+      }),
+    };
+
+    const tools = await discoverAndConvertTools(client);
+
+    await expect(tools['falsy-result'].execute({})).resolves.toBe(value);
+  });
+});
 const importReporter = () => import('../../bin/lib/eval/eval-reporter.mjs');
 
 // ── checkExpectations ──────────────────────────────────────────────

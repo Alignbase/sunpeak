@@ -163,6 +163,9 @@ export default async function (args: { city: string; units?: string }, extra: To
 }
 ```
 
+`ToolHandlerExtra` follows MCP SDK 2.0: use `extra.mcpReq.signal` for cancellation,
+`extra.mcpReq.id` for the request ID, and `extra.http?.authInfo` for validated HTTP auth.
+
 ### Backend-Only Tools (Confirmation Loop)
 
 A common pattern pairs a UI tool (for review) with a backend-only tool (for execution). The UI tool's `structuredContent` includes a `reviewTool` field. The resource component reads it and calls the backend tool via `useCallServerTool` when the user confirms:
@@ -341,7 +344,7 @@ setState({ decision: 'accepted' });
 const {
   input,         // TInput | null — final tool input arguments
   inputPartial,  // TInput | null — partial (streaming) input as it generates
-  output,        // TOutput | null — tool result (structuredContent ?? content)
+  output,        // TOutput | null — structuredContent when present, otherwise content
   isLoading,     // boolean — true until first toolResult arrives
   isError,       // boolean — true if tool returned an error
   isCancelled,   // boolean — true if tool was cancelled

@@ -103,7 +103,7 @@ registerAppTool(
   {
     title: 'Search Orders',
     description: 'Search orders and display the results.',
-    inputSchema: { query: z.string() },
+    inputSchema: z.object({ query: z.string() }),
     _meta: {
       ui: {
         resourceUri,

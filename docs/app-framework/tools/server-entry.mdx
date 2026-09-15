@@ -8,9 +8,9 @@ keywords: ['MCP Apps', 'ChatGPT Apps', 'MCP server', 'authentication', 'server c
 
 ## Overview
 
-The optional `src/server.ts` file configures authentication, OAuth protected-resource metadata, and server metadata. When present, the framework calls `auth()` on every MCP request and populates `extra.authInfo` in tool handlers.
+The optional `src/server.ts` file configures authentication, OAuth protected-resource metadata, and server metadata. When present, the framework calls `auth()` on every MCP request and populates `extra.http.authInfo` in tool handlers.
 
-Under the hood, the returned `AuthInfo` is set as `req.auth` on the HTTP request — the same mechanism the MCP SDK uses. This gives you the same flexibility as using the SDK directly.
+Under the hood, sunpeak passes the returned `AuthInfo` to the MCP SDK 2.0 transport, which exposes it in the handler's HTTP context.
 
 ## File Convention
 
@@ -140,7 +140,7 @@ The `authInfo` from the server entry is available in every tool handler:
 // src/tools/show-albums.ts
 
 export default async function (args: Record<string, unknown>, extra: ToolHandlerExtra) {
-  const token = extra.authInfo?.token;
+  const token = extra.http?.authInfo?.token;
   const data = await fetchAlbums(token, args.category);
   return { structuredContent: data };
 }

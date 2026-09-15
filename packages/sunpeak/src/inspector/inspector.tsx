@@ -4,7 +4,7 @@ import type {
   McpUiTheme,
   McpUiHostContext,
 } from '@modelcontextprotocol/ext-apps';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/client';
 import { readStoredPrefs, useInspectorState, writeStoredPrefs } from './use-inspector-state';
 import { useMcpConnection, type AuthType, type AuthConfig } from './use-mcp-connection';
 import { IframeResource } from './iframe-resource';
@@ -2636,7 +2636,8 @@ export function Inspector({
                   state.validateJSON(json, state.setModelContextJson, state.setModelContextError)
                 }
                 onFocus={() => state.setEditingField('modelContext')}
-                onBlur={() =>
+                onBlur={() => {
+                  const isEmpty = state.modelContextJson.trim() === '';
                   state.commitJSON(state.modelContextJson, state.setModelContextError, (parsed) => {
                     state.setModelContext(
                       parsed != null && typeof parsed === 'object' && !Array.isArray(parsed)
@@ -2644,10 +2645,10 @@ export function Inspector({
                         : null
                     );
                     state.setModelAppContext(
-                      parsed == null ? null : { content: [], structuredContent: parsed }
+                      isEmpty ? null : { content: [], structuredContent: parsed }
                     );
-                  })
-                }
+                  });
+                }}
                 error={state.modelContextError}
                 fill
               />
@@ -2698,22 +2699,27 @@ export function Inspector({
                   state.validateJSON(json, state.setToolResultJson, state.setToolResultError)
                 }
                 onFocus={() => state.setEditingField('toolResult')}
-                onBlur={() =>
+                onBlur={() => {
+                  const isEmpty = state.toolResultJson.trim() === '';
                   state.commitJSON(state.toolResultJson, state.setToolResultError, (parsed) => {
-                    if (parsed === null) {
+                    if (isEmpty) {
                       state.setToolResult(undefined);
                     } else {
-                      const result = parsed as Record<string, unknown>;
-                      if ('content' in result || 'structuredContent' in result) {
+                      const isToolResult =
+                        parsed !== null &&
+                        typeof parsed === 'object' &&
+                        !Array.isArray(parsed) &&
+                        ('content' in parsed || 'structuredContent' in parsed);
+                      if (isToolResult) {
                         state.setToolResult(
-                          result as import('@modelcontextprotocol/sdk/types.js').CallToolResult
+                          parsed as import('@modelcontextprotocol/client').CallToolResult
                         );
                       } else {
-                        state.setToolResult({ content: [], structuredContent: result });
+                        state.setToolResult({ content: [], structuredContent: parsed });
                       }
                     }
-                  })
-                }
+                  });
+                }}
                 error={state.toolResultError}
                 fill
               />

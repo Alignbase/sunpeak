@@ -103,7 +103,7 @@ registerAppTool(
   'update-quantity',
   {
     description: 'Update item quantity in cart',
-    inputSchema: { itemId: z.string(), quantity: z.number() },
+    inputSchema: z.object({ itemId: z.string(), quantity: z.number() }),
     _meta: {
       ui: {
         visibility: ['app'],

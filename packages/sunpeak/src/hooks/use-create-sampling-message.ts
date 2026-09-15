@@ -3,7 +3,7 @@ import type {
   CreateMessageRequest,
   CreateMessageResult,
   CreateMessageResultWithTools,
-} from '@modelcontextprotocol/sdk/types.js';
+} from '@modelcontextprotocol/client';
 import { useApp } from './use-app';
 
 export type CreateSamplingMessageParams = CreateMessageRequest['params'];
