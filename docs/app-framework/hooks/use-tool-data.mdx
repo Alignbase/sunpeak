@@ -8,7 +8,7 @@ keywords: ["MCP Apps", "ChatGPT Apps", "React hooks", "tool data", "tool input",
 
 ## Overview
 
-The `useToolData` hook provides reactive access to both the tool's input arguments and output data (structured content). It replaces the need for separate input/output hooks. The `output` field contains the data from your MCP tool's `structuredContent` response.
+The `useToolData` hook provides reactive access to both the tool's input arguments and output data. It replaces the need for separate input/output hooks. The `output` field contains `structuredContent` when the result includes that property, including an explicit `null`. When the property is absent, it falls back to the result's `content` blocks.
 
 <Card horizontal title="Wraps ontoolinput · ontoolresult · ontoolcancelled" icon="cube" href="/mcp-apps/app/event-handlers">
   MCP Apps SDK reference
@@ -52,7 +52,7 @@ Returns a `ToolData<TInput, TOutput>` object with the following fields:
 </ResponseField>
 
 <ResponseField name="output" type="TOutput | null">
-  The structured content from the tool result.
+  The tool result's `structuredContent` value when present, including explicit null. Falls back to `content` when `structuredContent` is absent.
 </ResponseField>
 
 <ResponseField name="isError" type="boolean">

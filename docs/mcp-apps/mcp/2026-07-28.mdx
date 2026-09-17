@@ -82,7 +82,7 @@ The View method [`createSamplingMessage()`](/mcp-apps/app/requests/create-sampli
 ### Results and subscriptions changed
 
 - Every result includes `resultType`, normally `"complete"`.
-- `structuredContent` may be any JSON value when its `outputSchema` permits it.
+- `structuredContent` may be any JSON value when its `outputSchema` permits it. See [MCP structuredContent, content, and _meta](/mcp-apps/server/content-structuredcontent-meta#json-values-and-protocol-versions) for legacy and MCP Apps compatibility.
 - `subscriptions/listen` replaces the HTTP GET notification stream and `resources/subscribe` methods.
 - Tasks moved from the core protocol to the `io.modelcontextprotocol/tasks` extension.
 - Core Roots, Sampling, and Logging are deprecated for new implementations. Their MCP Apps counterparts follow the Apps specification, not the deprecated core server APIs.

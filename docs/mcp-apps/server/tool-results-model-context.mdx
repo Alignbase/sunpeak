@@ -25,7 +25,7 @@ MCP App data crosses three boundaries: the model reads the tool result, the View
 | Field                | Set by                                 | Read by                              | Use it for                                                                   |
 | -------------------- | -------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------- |
 | `content`            | Tool handler                           | Model, host, View, text-only clients | Short human-readable summary and recoverable errors.                         |
-| `structuredContent`  | Tool handler                           | Model, View, and compatible clients  | Typed data the model may read and the UI renders, matching `outputSchema`.   |
+| `structuredContent`  | Tool handler                           | Model, View, and compatible clients  | JSON data the model may read and the UI renders, matching `outputSchema`.    |
 | `_meta`              | Tool handler or resource read callback | Host and app runtime                 | Component-only metadata, IDs, hints, CSP, iframe permissions, or host data. |
 | `outputSchema`       | Tool definition                        | Host, clients, SDK validation        | Contract for `structuredContent`.                                            |
 | `updateModelContext` | View                                   | Model on later turns                 | Current UI state the model should know after the app renders.                |
@@ -44,6 +44,8 @@ flowchart LR
 ```
 
 The first model-called tool should return enough `content` for a non-UI host to answer the user. The View should render `structuredContent`, not parse `content`. Treat `structuredContent` as model-visible, so it should contain only data the model can safely use.
+
+Core MCP `2026-07-28` allows any JSON value in a tool result's `structuredContent`; the prior `2025-11-25` revision requires an object. Most MCP Apps should keep an object root for cross-version portability. See [MCP structuredContent, content, and _meta](/mcp-apps/server/content-structuredcontent-meta#json-values-and-protocol-versions) for the compatibility table.
 
 ## Return Both Text and Structured Data
 
@@ -155,6 +157,13 @@ await app.updateModelContext({
 
 Each call overwrites the previous app context. Send the complete current state you want the model to retain, not just a patch.
 
+<Note>
+  Tool result `structuredContent` and `updateModelContext().structuredContent` have different root
+  types. Current core tool results may use any JSON value, but MCP Apps model context remains a
+  `Record<string, unknown>`. Wrap arrays, scalars, and null in a named object field before calling
+  `updateModelContext()`.
+</Note>
+
 ## App-only Tool Results
 
 App-only tools still return normal MCP tool results. Keep `content` short for logs and debugging, put model-safe data in `structuredContent`, and put component-only data in `_meta`.
@@ -201,24 +210,24 @@ The model never sees this tool in its tool list, but the result shape still matt
 <CardGroup cols={2}>
   <Card
     title="Tool and Resource Contract"
-    icon="list-check"
+    icon="page"
     href="/mcp-apps/server/tool-resource-contract"
   >
     Check the full server-side MCP App contract.
   </Card>
   <Card
     title="content vs structuredContent vs _meta"
-    icon="split"
+    icon="page"
     href="/mcp-apps/server/content-structuredcontent-meta"
   >
     Choose the correct data channel for each tool result field.
   </Card>
-  <Card title="Tool _meta" icon="tag" href="/mcp-apps/server/tool-meta">
+  <Card title="Tool _meta" icon="page" href="/mcp-apps/server/tool-meta">
     Link tools to Views and control model vs app visibility.
   </Card>
   <Card
     title="updateModelContext"
-    icon="message-square"
+    icon="page"
     href="/mcp-apps/app/requests/update-model-context"
   >
     Push View state into future model turns.

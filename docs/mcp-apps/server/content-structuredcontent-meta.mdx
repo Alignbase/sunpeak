@@ -1,10 +1,13 @@
 ---
-title: 'MCP App content vs structuredContent vs _meta'
+title: 'MCP structuredContent: content vs _meta'
 sidebarTitle: 'content vs _meta'
-description: 'Choose the right MCP App tool result field: content for readable summaries, structuredContent for model-visible typed data and UI payloads, and _meta for component-only data.'
+description: 'Use MCP structuredContent, content, and _meta correctly, including JSON value shapes, outputSchema validation, model visibility, and protocol-version compatibility.'
 keywords:
   [
     'MCP content vs structuredContent',
+    'MCP structuredContent array',
+    'MCP structuredContent null',
+    'CallToolResult structuredContent',
     'MCP App _meta',
     'MCP tool result _meta',
     'MCP structuredContent',
@@ -25,6 +28,29 @@ MCP App tool results have three data channels. Pick the channel based on who sho
 | `_meta`             | Host and View only                   | IDs, traces, cache hints, large lookup maps, and data the model should not see. |
 
 `structuredContent` is not private. If the model should not see a field, put that field in `_meta` or fetch it later through an app-only tool.
+
+## JSON Values and Protocol Versions
+
+The allowed `structuredContent` shape depends on the protocol surface:
+
+| Surface | Allowed shape |
+| --- | --- |
+| Core MCP `2025-11-25` tool result | JSON object |
+| Core MCP `2026-07-28` tool result | Any JSON value: object, array, string, number, boolean, or null |
+| MCP Apps SDK 2.0 `ontoolresult` | `unknown`, because it can carry any current core tool result value |
+| MCP Apps `updateModelContext()` | JSON object (`Record<string, unknown>`) |
+| sunpeak convention-based `outputSchema` export | Zod raw shape, wrapped in `z.object()` by the framework |
+
+For an app that must work across both core MCP revisions, keep tool result data object-shaped. If a modern-only server returns an array, scalar, or null, declare an `outputSchema` with that exact root type and make sure every client and Host supports core MCP `2026-07-28`.
+
+<Note>
+  Current sunpeak HTTP server wrappers use the SDK 2.0 legacy compatibility transport. They wrap
+  non-object tool result values as `{ result: value }` on a `2025-11-25` connection. sunpeak's
+  file-based `outputSchema` export is also an object shape. Return an object when you want the same
+  View data shape on legacy and modern connections.
+</Note>
+
+This tool result rule does not change `updateModelContext()`. Its `structuredContent` field remains an object in the MCP Apps `2026-01-26` protocol.
 
 ## Recommended Shape
 
@@ -73,6 +99,8 @@ Use `structuredContent` for JSON that the View renders and the model may read:
 
 If the data is sensitive, too large, or not useful to the model, do not put it here.
 
+When you consume `structuredContent`, validate its shape or check whether the field exists. Do not use a truthy check because `false`, `0`, an empty string, and `null` can be valid modern results.
+
 ### Put component-only data in `_meta`
 
 Use `_meta` for data that should reach the iframe but not the model:
@@ -117,6 +145,8 @@ Use this pattern when the View needs extra data after the initial render, but th
 | Only returning `structuredContent`      | Text-only clients have no readable fallback.    | Add a short `content` text block.                           |
 | Putting all UI data in `content`        | The View has to parse prose or JSON text.       | Put typed data in `structuredContent`.                      |
 | Treating `structuredContent` as private | The model may read it.                          | Move private fields to `_meta`.                             |
+| Testing `structuredContent` by truthiness | Valid values such as `false`, `0`, and `null` look absent. | Validate against `outputSchema` or check whether the field exists. |
+| Returning a non-object through a legacy connection | Core MCP `2025-11-25` only supports object-shaped structured results. | Wrap the value in an object or require core MCP `2026-07-28`. |
 | Hiding answer-critical facts in `_meta` | The model cannot rely on component-only data.   | Put model-needed facts in `content` or `structuredContent`. |
 | Omitting `outputSchema`                 | Clients cannot validate the typed result shape. | Add `outputSchema` for structured UI payloads.              |
 
@@ -125,14 +155,14 @@ Use this pattern when the View needs extra data after the initial render, but th
 <CardGroup cols={2}>
   <Card
     title="Tool Results and Model Context"
-    icon="message-square"
+    icon="page"
     href="/mcp-apps/server/tool-results-model-context"
   >
     Keep model context in sync after the View changes.
   </Card>
   <Card
     title="Tool and Resource Contract"
-    icon="list-check"
+    icon="page"
     href="/mcp-apps/server/tool-resource-contract"
   >
     Check the full server-side MCP App contract.
@@ -140,7 +170,14 @@ Use this pattern when the View needs extra data after the initial render, but th
   <Card title="Add a UI to an MCP Tool" icon="page" href="/mcp-apps/server/add-ui-to-tool">
     Convert a normal MCP tool into a UI-rendering app.
   </Card>
-  <Card title="Tool _meta" icon="tag" href="/mcp-apps/server/tool-meta">
+  <Card title="Tool _meta" icon="page" href="/mcp-apps/server/tool-meta">
     Link tools to Views and control tool visibility.
+  </Card>
+  <Card
+    title="Core MCP 2026 Tool Results"
+    icon="link"
+    href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#structured-content"
+  >
+    Read the current structured content and output schema requirements.
   </Card>
 </CardGroup>

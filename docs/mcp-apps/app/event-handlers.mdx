@@ -1,8 +1,8 @@
 ---
 title: "MCP Apps Event Handlers - Host Events"
 sidebarTitle: "Event Handlers"
-description: "Handle MCP App events: tool input, streaming partial input, tool result, tool cancelled, host context changes, teardown, and bidirectional tool calls."
-keywords: ["MCP Apps", "ChatGPT Apps", "event handlers", "tool input", "tool result", "host context"]
+description: "Handle MCP App events with on* setters, addEventListener, and MCP SDK 2.0 method-keyed handlers for tool input, results, cancellation, host context, and app tools."
+keywords: ["MCP Apps", "ChatGPT Apps", "event handlers", "tool input", "tool result", "host context", "setNotificationHandler", "setRequestHandler"]
 ---
 
 <Badge color="green">MCP Apps SDK</Badge>
@@ -82,9 +82,9 @@ app.ontoolresult = (params) => {
 | Field | Type | Description |
 |-------|------|-------------|
 | `content` | `ContentBlock[]` | Text content for model context |
-| `structuredContent` | `unknown` | JSON data optimized for UI rendering |
+| `structuredContent` | `unknown` | Any JSON value optimized for UI rendering |
 | `isError` | `boolean` | Whether the tool returned an error |
-| `_meta` | `object` | Optional protocol-level metadata (e.g., `progressToken`) |
+| `_meta` | `object` | Optional protocol-level and server metadata |
 
 ### [ontoolcancelled](/mcp-apps/app/event-handlers/ontoolcancelled)
 
@@ -177,23 +177,32 @@ app.onlisttools = async () => {
 };
 ```
 
-## Using setNotificationHandler / setRequestHandler
+## Use Method-keyed Handlers for Custom Messages
 
-The setter properties above are convenience wrappers. You can also use the underlying MCP SDK methods directly:
+Use the typed setters and `addEventListener()` for standard MCP App events. If you control both the View and Host and need a custom protocol message, SDK 2.0 keys the underlying handlers by method name:
 
 ```ts
-import { McpUiToolInputNotificationSchema } from "@modelcontextprotocol/ext-apps";
+import { z } from "zod";
 
-app.setNotificationHandler(McpUiToolInputNotificationSchema, (notification) => {
-  console.log("Tool input:", notification.params.arguments);
-});
+const SelectionChangedParams = z.object({ itemId: z.string() });
+
+app.setNotificationHandler(
+  "example/selection-changed",
+  { params: SelectionChangedParams },
+  (params) => {
+    console.log("Selected item:", params.itemId);
+  },
+);
 ```
 
-<Note>
-  This is the SDK 1.x schema-keyed form. SDK 2.0 keys handlers by method name and keeps this form
-  only as a deprecated overload. See [Update Custom Protocol
-  Handlers](/mcp-apps/sdk-v2-migration#update-custom-protocol-handlers).
-</Note>
+The three-argument form validates custom notification params before calling the handler. Custom requests use the same method-keyed shape with `setRequestHandler(method, { params, result? }, handler)`.
+
+<Warning>
+  Custom methods are outside the MCP Apps specification. A normal Host will not send or handle
+  them, so use this API only when you own the Host integration. Do not replace built-in progress,
+  cancellation, or `ui/*` handlers. See [Update Custom Protocol
+  Handlers](/mcp-apps/sdk-v2-migration#update-custom-protocol-handlers) when migrating 1.x code.
+</Warning>
 
 <Tip>
 Register event handlers in the `onAppCreated` callback of [`useApp`](/mcp-apps/react/use-app) to ensure they're set before the handshake. The [sunpeak framework](/quickstart) provides convenience hooks: [`useToolData`](/app-framework/hooks/use-tool-data), [`useTeardown`](/app-framework/hooks/use-teardown), and [`useAppTools`](/app-framework/hooks/use-app-tools).

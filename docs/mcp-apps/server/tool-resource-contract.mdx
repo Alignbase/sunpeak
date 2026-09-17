@@ -226,7 +226,7 @@ return {
 | Field               | Audience                        | Guidance                                                                                                                            |
 | ------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `content`           | Model, host, View, text-only clients | Include a short text summary. For structured results, MCP recommends also serializing the JSON into a text block for compatibility. |
-| `structuredContent` | Model, host, View, and typed clients | Put model-safe data your UI renders here. If you declare `outputSchema`, this object must match it.                                 |
+| `structuredContent` | Model, host, View, and typed clients | Put model-safe data your UI renders here. If you declare `outputSchema`, this value must match it. See the [protocol-version rules](/mcp-apps/server/content-structuredcontent-meta#json-values-and-protocol-versions). |
 | `_meta`             | Host or component-only metadata     | Use for data the model should not see. Do not rely on it for model-visible facts.                                                   |
 | `isError`           | Host and model                  | Set `true` for tool execution errors that should still return a tool result. Use JSON-RPC errors for protocol failures.             |
 
@@ -291,7 +291,7 @@ Before testing in a real host, verify the server response shape:
 
 ## Related
 
-<Card horizontal title="Build an MCP App Server" icon="server" href="/mcp-apps/server/build-server">
+<Card horizontal title="Build an MCP App Server" icon="page" href="/mcp-apps/server/build-server">
   Complete server example with capability detection and fallback tools.
 </Card>
 
@@ -303,19 +303,19 @@ Before testing in a real host, verify the server response shape:
   Full reference for resource linkage and tool visibility.
 </Card>
 
-<Card horizontal title="Requirements Checklist" icon="check-check" href="/mcp-apps/server/requirements">
+<Card horizontal title="Requirements Checklist" icon="page" href="/mcp-apps/server/requirements">
   Verify portability, fallback behavior, security metadata, annotations, and tests before shipping.
 </Card>
 
-<Card horizontal title="Tool Results and Model Context" icon="message-square" href="/mcp-apps/server/tool-results-model-context">
+<Card horizontal title="Tool Results and Model Context" icon="page" href="/mcp-apps/server/tool-results-model-context">
   Decide what belongs in content, structuredContent, _meta, and updateModelContext.
 </Card>
 
-<Card horizontal title="content vs structuredContent vs _meta" icon="split" href="/mcp-apps/server/content-structuredcontent-meta">
+<Card horizontal title="content vs structuredContent vs _meta" icon="page" href="/mcp-apps/server/content-structuredcontent-meta">
   Choose the right tool result data channel.
 </Card>
 
-<Card horizontal title="Tool Annotations" icon="shield-check" href="/mcp-apps/server/tool-annotations">
+<Card horizontal title="Tool Annotations" icon="page" href="/mcp-apps/server/tool-annotations">
   Add host-facing safety hints to MCP App tools.
 </Card>
 

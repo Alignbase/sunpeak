@@ -1,8 +1,8 @@
 ---
 title: "MCP Apps updateModelContext - Update Host Model Context"
 sidebarTitle: "updateModelContext"
-description: "Update the host's model context with app state. Provide structured or unstructured data that the model can access in future turns without triggering an immediate response."
-keywords: ["MCP Apps", "ChatGPT Apps", "updateModelContext", "model context", "app state", "app requests"]
+description: "Update the host's model context with MCP App state. Send content blocks or an object-shaped structuredContent value for future model turns."
+keywords: ["MCP Apps", "ChatGPT Apps", "updateModelContext", "model context", "structuredContent object", "app state", "app requests"]
 ---
 
 <Badge color="green">MCP Apps SDK</Badge>
@@ -18,6 +18,12 @@ import { App } from "@modelcontextprotocol/ext-apps";
 Each call to `updateModelContext` **overwrites** any previously set context. To clear the context, call it with empty content.
 
 This is useful for keeping the model informed about what the user is viewing or doing in the app, such as the current page, selected items, or filter state.
+
+<Note>
+  `updateModelContext().structuredContent` must be an object. This differs from a core MCP
+  `CallToolResult`, whose `structuredContent` may be any JSON value in protocol `2026-07-28`.
+  Wrap an array, scalar, or null in a named object field before sending it as model context.
+</Note>
 
 ## Signature
 

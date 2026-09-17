@@ -1,8 +1,8 @@
 ---
 title: "MCP Apps ontoolresult - Tool Execution Result"
 sidebarTitle: "ontoolresult"
-description: "Handle the result of a tool execution sent by the host. Use ontoolresult to render output, detect errors, and access structured content for UI display."
-keywords: ["MCP Apps", "ChatGPT Apps", "ontoolresult", "tool result", "CallToolResult", "event handler", "notification handler"]
+description: "Handle MCP App tool results with ontoolresult, including errors, content blocks, object, array, scalar, and null structuredContent values."
+keywords: ["MCP Apps", "ChatGPT Apps", "ontoolresult", "tool result", "CallToolResult", "MCP structuredContent", "structuredContent array", "structuredContent null", "event handler"]
 ---
 
 <Badge color="green">MCP Apps SDK</Badge>
@@ -38,7 +38,7 @@ app.ontoolresult = (params) => void;
 </ResponseField>
 
 <ResponseField name="params.structuredContent" type="unknown">
-  Structured data optimized for programmatic use. The model may read this data too, so keep private fields in `_meta`.
+  Any JSON value optimized for programmatic use: object, array, string, number, boolean, or null. The model may read this data too, so keep private fields in `_meta`.
 </ResponseField>
 
 <ResponseField name="params.isError" type="boolean">
@@ -46,7 +46,7 @@ app.ontoolresult = (params) => void;
 </ResponseField>
 
 <ResponseField name="params._meta" type="object">
-  Optional metadata attached to the result (for example a `progressToken` or a related-task reference). Fields here are protocol-level and host-defined; do not assume application fields unless your server sets them.
+  Optional metadata attached to the result. MCP 2026 results may include `io.modelcontextprotocol/serverInfo`; servers and hosts may add other fields. Do not assume application fields unless your server sets them.
 </ResponseField>
 
 ## Usage
@@ -69,27 +69,33 @@ app.ontoolresult = (params) => {
 await app.connect();
 ```
 
-### Rendering structured content
+### Validate structured content before rendering
 
 ```ts
+import { z } from "zod";
+
+const TableData = z.object({
+  rows: z.array(z.record(z.string(), z.string())),
+  columns: z.array(z.string()),
+});
+
 app.ontoolresult = (params) => {
   if (params.isError) {
     renderError(params.content);
     return;
   }
 
-  const data = params.structuredContent as {
-    rows: Array<Record<string, string>>;
-    columns: string[];
-  };
+  const data = TableData.safeParse(params.structuredContent);
 
-  if (data) {
-    renderTable(data.columns, data.rows);
+  if (data.success) {
+    renderTable(data.data.columns, data.data.rows);
   } else {
     renderTextContent(params.content);
   }
 };
 ```
+
+Do not test `params.structuredContent` by truthiness. `false`, `0`, an empty string, and `null` are valid SDK 2.0 values when the tool's `outputSchema` allows them. Use a schema or check `"structuredContent" in params` when you only need to distinguish an absent field from an explicit value.
 
 ### Using with the sunpeak framework
 
@@ -99,11 +105,13 @@ The sunpeak framework provides the [`useToolData`](/app-framework/hooks/use-tool
 import { useToolData } from "sunpeak";
 
 function MyComponent() {
-  const toolData = useToolData();
-  // toolData.result contains the tool execution result
-  // toolData.isError indicates whether the tool failed
+  const { output, isError } = useToolData<unknown, unknown>();
+  // output contains structuredContent when the result includes it.
+  // isError indicates whether the tool failed.
 }
 ```
+
+See [MCP structuredContent, content, and _meta](/mcp-apps/server/content-structuredcontent-meta) for JSON value support and legacy protocol compatibility.
 
 ## Related
 
