@@ -166,7 +166,7 @@
   "author": "Alignbase Inc.",
   "license": "MIT",
   "peerDependencies": {
-    "@ai-sdk/google": "^4.0.67",
+    "@ai-sdk/google": "^4.0.75",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
@@ -176,22 +176,22 @@
     }
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.52",
-    "@ai-sdk/openai": "^4.0.65",
-    "@clack/prompts": "^1.8.0",
+    "@ai-sdk/anthropic": "^4.0.57",
+    "@ai-sdk/openai": "^4.0.70",
+    "@clack/prompts": "^1.8.1",
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/core": "^2.0.0",
     "@modelcontextprotocol/ext-apps": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "ai": "^7.0.97",
+    "ai": "^7.0.106",
     "clsx": "^2.1.1",
     "esbuild": "^0.28.2",
-    "hono": "^4.13.7",
-    "tailwind-merge": "^3.6.0",
+    "hono": "^4.13.8",
+    "tailwind-merge": "^3.7.0",
     "vite": "8.3.0",
-    "zod": "^4.6.2"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
@@ -201,7 +201,7 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@typescript-eslint/eslint-plugin": "^8.70.0",
@@ -210,8 +210,8 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "happy-dom": "^20.14.3",
-    "prettier": "^3.9.6",
+    "happy-dom": "^20.14.5",
+    "prettier": "^3.9.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",
@@ -219,7 +219,7 @@
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vite-plugin-dts": "5.1.0",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.1"
   },
   "repository": {
     "type": "git",
