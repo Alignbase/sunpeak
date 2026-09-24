@@ -650,7 +650,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers':
-    'content-type, accept, authorization, mcp-session-id, ngrok-skip-browser-warning',
+    'content-type, accept, authorization, mcp-session-id, mcp-protocol-version, mcp-method, mcp-name, last-event-id, ngrok-skip-browser-warning',
   'Access-Control-Expose-Headers': 'mcp-session-id, www-authenticate',
 } as const;
 
@@ -661,7 +661,7 @@ const CORS_HEADERS = {
 // SUNPEAK_MAX_BODY_BYTES.
 const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
 function getMaxBodyBytes(): number {
-  const raw = process.env.SUNPEAK_MAX_BODY_BYTES;
+  const raw = typeof process === 'undefined' ? undefined : process.env.SUNPEAK_MAX_BODY_BYTES;
   if (!raw) return DEFAULT_MAX_BODY_BYTES;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_BODY_BYTES;
@@ -689,6 +689,34 @@ async function readBodyWithLimit(req: IncomingMessage, maxBytes: number): Promis
     });
     req.on('error', reject);
   });
+}
+
+async function readWebBodyWithLimit(req: Request, maxBytes: number): Promise<string | null> {
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(body);
 }
 
 /**
@@ -1129,22 +1157,20 @@ export function createHandler(config: WebHandlerConfig): (req: Request) => Promi
       const maxBytes = getMaxBodyBytes();
       const contentLength = req.headers.get('content-length');
       if (contentLength && Number(contentLength) > maxBytes) {
-        return new Response('Payload Too Large', { status: 413 });
+        return new Response('Payload Too Large', { status: 413, headers: CORS_HEADERS });
       }
-      let rawBody: string;
+      let rawBody: string | null;
       try {
-        const buf = new Uint8Array(await req.arrayBuffer());
-        if (buf.byteLength > maxBytes) {
-          return new Response('Payload Too Large', { status: 413 });
-        }
-        rawBody = new TextDecoder().decode(buf);
+        rawBody = await readWebBodyWithLimit(req, maxBytes);
       } catch {
-        return new Response('Invalid request body', { status: 400 });
+        return new Response('Invalid request body', { status: 400, headers: CORS_HEADERS });
       }
+      if (rawBody === null)
+        return new Response('Payload Too Large', { status: 413, headers: CORS_HEADERS });
       try {
         parsedBody = JSON.parse(rawBody);
       } catch {
-        return new Response('Invalid JSON', { status: 400 });
+        return new Response('Invalid JSON', { status: 400, headers: CORS_HEADERS });
       }
       if (isJsonRpcMessage(parsedBody)) {
         const sid = req.headers.get('mcp-session-id');

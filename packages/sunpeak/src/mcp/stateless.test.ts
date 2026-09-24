@@ -103,10 +103,21 @@ describe('createHandler stateless mode', () => {
 
   it('handles CORS preflight in stateless mode', async () => {
     const handler = createHandler(baseWebConfig);
-    const req = new Request('http://localhost:8000/mcp', { method: 'OPTIONS' });
+    const req = new Request('http://localhost:8000/mcp', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://example.com',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'mcp-protocol-version,mcp-method,mcp-name,last-event-id',
+      },
+    });
     const res = await handler(req);
     expect(res.status).toBe(204);
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    const allowed = res.headers.get('access-control-allow-headers') ?? '';
+    for (const header of ['mcp-protocol-version', 'mcp-method', 'mcp-name', 'last-event-id']) {
+      expect(allowed).toContain(header);
+    }
   });
 
   it('handles tools/list without prior initialize (cold start)', async () => {
@@ -205,6 +216,31 @@ describe('createHandler stateless mode', () => {
     });
     const res = await handler(req);
     expect(res.status).toBe(400);
+  });
+
+  it('rejects an oversized streamed body without a content-length header', async () => {
+    const handler = createHandler(baseWebConfig);
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(4 * 1024 * 1024));
+        controller.enqueue(new Uint8Array(1));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const req = new Request('http://localhost:8000/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+
+    const res = await handler(req);
+    expect(res.status).toBe(413);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(cancelled).toBe(true);
   });
 });
 

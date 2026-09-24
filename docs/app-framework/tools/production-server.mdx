@@ -22,6 +22,8 @@ sunpeak provides three ways to run a production MCP server, from zero-config to 
 `createMcpHandler` and `createHandler` accept these as config objects — you load and pass them yourself. This gives full control over how tools, resources, and auth are provided.
 
 All three use [MCP Streamable HTTP](/mcp-apps/mcp/overview#transports) transport on a single `/mcp` endpoint.
+They accept MCP request headers in cross-origin browser calls and limit POST bodies to 4 MiB by
+default. On Node.js, set `SUNPEAK_MAX_BODY_BYTES` to change that limit when a tool needs larger inputs.
 
 ## `createMcpHandler`
 

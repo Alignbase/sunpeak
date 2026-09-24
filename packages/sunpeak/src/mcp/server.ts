@@ -608,7 +608,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers':
-    'content-type, accept, authorization, mcp-session-id, ngrok-skip-browser-warning',
+    'content-type, accept, authorization, mcp-session-id, mcp-protocol-version, mcp-method, mcp-name, last-event-id, ngrok-skip-browser-warning',
   'Access-Control-Expose-Headers': 'mcp-session-id',
 } as const;
 
