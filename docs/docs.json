@@ -492,7 +492,8 @@
               "mcp-apps/server/tool-annotations",
               "mcp-apps/server/tool-meta",
               "mcp-apps/server/tool-resource-contract",
-              "mcp-apps/server/tool-results-model-context"
+              "mcp-apps/server/tool-results-model-context",
+              "mcp-apps/server/tool-schemas"
             ]
           },
           {

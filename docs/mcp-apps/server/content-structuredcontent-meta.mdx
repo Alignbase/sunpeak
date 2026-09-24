@@ -150,6 +150,10 @@ Use this pattern when the View needs extra data after the initial render, but th
 | Hiding answer-critical facts in `_meta` | The model cannot rely on component-only data.   | Put model-needed facts in `content` or `structuredContent`. |
 | Omitting `outputSchema`                 | Clients cannot validate the typed result shape. | Add `outputSchema` for structured UI payloads.              |
 
+For schema library requirements, runtime validation behavior, and examples for server and
+app-side tools, see [MCP App inputSchema and outputSchema
+Validation](/mcp-apps/server/tool-schemas).
+
 ## Related
 
 <CardGroup cols={2}>
@@ -179,5 +183,8 @@ Use this pattern when the View needs extra data after the initial render, but th
     href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#structured-content"
   >
     Read the current structured content and output schema requirements.
+  </Card>
+  <Card title="Tool Schemas" icon="brackets-curly" href="/mcp-apps/server/tool-schemas">
+    Define and validate inputSchema and outputSchema contracts.
   </Card>
 </CardGroup>

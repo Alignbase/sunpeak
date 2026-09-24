@@ -1,0 +1,277 @@
+---
+title: 'MCP App inputSchema and outputSchema Validation'
+sidebarTitle: 'Tool Schemas'
+description: 'Define MCP App inputSchema and outputSchema contracts with Standard Schema, Zod, and JSON Schema 2020-12. Validate tool arguments and structuredContent on the server and in app-side tools.'
+keywords:
+  [
+    'MCP inputSchema',
+    'MCP outputSchema',
+    'MCP tool schema validation',
+    'MCP Apps Zod',
+    'MCP Standard Schema',
+    'MCP JSON Schema',
+    'MCP structuredContent validation',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+MCP tools use two related schema formats. In SDK code, you pass a runtime schema such as a Zod
+object. On the wire, clients receive JSON Schema 2020-12 in `tools/list`.
+
+| Layer | Schema form | What it does |
+| --- | --- | --- |
+| SDK registration | Standard Schema with JSON Schema support | Infers TypeScript types, validates values at runtime, and exports the wire schema. |
+| `tools/list` | JSON Schema 2020-12 | Tells hosts and models which arguments and structured results a tool accepts. |
+| `tools/call` | JSON values | Validates incoming `arguments` and returned `structuredContent` against the registered schemas. |
+
+This distinction matters because [`registerAppTool()`](/mcp-apps/server/register-app-tool) does not
+accept a plain JSON Schema object as its runtime schema. It expects a schema library value that
+implements Standard Schema validation and the `~standard.jsonSchema` interface. Use manual
+`onlisttools` and `oncalltool` handlers when you want to author the wire schemas and validation
+logic yourself.
+
+## Server Tool Schemas
+
+Pass complete schema objects to `registerAppTool()`. Zod 4.2 or later implements both required
+Standard Schema interfaces.
+
+```ts
+import { registerAppTool } from '@modelcontextprotocol/ext-apps/server';
+import { z } from 'zod';
+
+const SearchInput = z.object({
+  query: z.string().min(1),
+  limit: z.number().int().min(1).max(50).default(10),
+});
+
+const SearchOutput = z.object({
+  items: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+    })
+  ),
+  nextCursor: z.string().optional(),
+});
+
+registerAppTool(
+  server,
+  'search-catalog',
+  {
+    title: 'Search catalog',
+    description: 'Search the catalog and display matching items.',
+    inputSchema: SearchInput,
+    outputSchema: SearchOutput,
+    annotations: { readOnlyHint: true },
+    _meta: {
+      ui: { resourceUri: 'ui://catalog/results.html' },
+    },
+  },
+  async ({ query, limit }) => {
+    const result = await searchCatalog({ query, limit });
+
+    return {
+      content: [
+        { type: 'text', text: `Found ${result.items.length} matching items.` },
+      ],
+      structuredContent: result,
+    };
+  }
+);
+```
+
+The MCP server SDK performs these checks:
+
+1. It converts each registered schema to JSON Schema for `tools/list`.
+2. Before the callback runs, it validates and parses `tools/call.arguments` with `inputSchema`.
+3. After a successful callback, it requires `structuredContent` when `outputSchema` exists and
+   validates that value. Tool results with `isError: true` are not checked against `outputSchema`.
+
+If input or output validation fails, the callback is skipped or its successful result is replaced
+with a tool error result. The model can read that error and correct a later call.
+
+<Warning>
+  A TypeScript type does not validate network input. Define `inputSchema` even if the callback
+  argument already has a TypeScript annotation.
+</Warning>
+
+## App-Side Tool Schemas
+
+Views can expose tools with [`app.registerTool()`](/mcp-apps/app/app-tools).
+The same schema value supplies TypeScript inference, runtime validation, and the JSON Schema sent
+to the host.
+
+```ts
+import { z } from 'zod';
+
+const SelectionInput = z.object({
+  format: z.enum(['text', 'html']).default('text'),
+});
+
+const SelectionOutput = z.object({
+  value: z.string(),
+  format: z.enum(['text', 'html']),
+});
+
+app.registerTool(
+  'get-selection',
+  {
+    description: 'Return the current selection in the requested format.',
+    inputSchema: SelectionInput,
+    outputSchema: SelectionOutput,
+  },
+  ({ format }) => ({
+    content: [{ type: 'text', text: 'Read the current selection.' }],
+    structuredContent: {
+      value: readSelection(format),
+      format,
+    },
+  })
+);
+```
+
+`app.registerTool()` parses arguments before calling the handler. For successful results, it also
+parses `structuredContent` with `outputSchema`. A missing or invalid structured result rejects the
+tool call. Results marked `isError: true` bypass output validation.
+
+If you define app-side tools through [`onlisttools`](/mcp-apps/app/event-handlers/onlisttools) and
+[`oncalltool`](/mcp-apps/app/event-handlers/oncalltool) instead, return JSON Schema from
+`onlisttools` and validate `params.arguments` inside `oncalltool`. The low-level handlers do not add
+runtime validation for you.
+
+## Input Schema Rules
+
+Every MCP tool definition has an object-shaped `inputSchema`, including tools without arguments.
+The SDK emits an empty object schema when you omit `inputSchema`, but an explicit schema documents
+intent and rejects unexpected fields when you use `.strict()`:
+
+```ts
+const NoInput = z.object({}).strict();
+```
+
+Use descriptions and constraints that help a model form valid arguments:
+
+```ts
+const ExportInput = z.object({
+  reportId: z.string().describe('Stable report ID returned by list-reports.'),
+  format: z.enum(['csv', 'pdf']).describe('File format for the exported report.'),
+  includeDetails: z.boolean().default(false),
+});
+```
+
+Keep server authorization and business checks in the callback. A schema checks the shape and basic
+constraints of the input, but it does not prove that the caller may access a record or perform an
+action.
+
+## Output Schema Rules
+
+Add `outputSchema` when a View or another client depends on `structuredContent`. The handler must
+then return matching data on every successful path.
+
+```ts
+const SaveOutput = z.object({
+  documentId: z.string(),
+  revision: z.number().int().nonnegative(),
+  savedAt: z.string().datetime(),
+});
+
+return {
+  content: [{ type: 'text', text: 'Saved the document.' }],
+  structuredContent: {
+    documentId,
+    revision,
+    savedAt: new Date().toISOString(),
+  },
+};
+```
+
+Core MCP `2026-07-28` permits any JSON value at the root of `structuredContent` when the output
+schema permits it. Core MCP `2025-11-25` requires an object, so use an object root for MCP Apps that
+must work across both versions. See [MCP structuredContent, content, and
+_meta](/mcp-apps/server/content-structuredcontent-meta#json-values-and-protocol-versions) for the
+compatibility rules.
+
+Keep a readable `content` block alongside `structuredContent`. Clients without a View still need a
+useful result, and the MCP specification recommends serialized JSON in a text block for backwards
+compatibility.
+
+## Standard Schema Requirements
+
+The SDK reads two members from a compatible runtime schema:
+
+- `~standard.validate` validates input and output values.
+- `~standard.jsonSchema.input()` or `.output()` exports JSON Schema 2020-12.
+
+Zod 4.2 or later, ArkType, and Valibot implement these interfaces. Older Zod versions do not meet
+the MCP SDK 2.x requirement. A plain object such as `{ type: 'object', properties: ... }` is already
+wire JSON Schema, but it has no runtime validator or Standard Schema metadata, so do not pass it to
+`registerAppTool()` or `app.registerTool()`.
+
+The SDK 2.x server helper still accepts a raw Zod shape such as `{ query: z.string() }`, but that
+overload is deprecated. Wrap the shape with `z.object()` so input and output schemas follow the same
+pattern.
+
+## Common Schema Errors
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `Schema ... does not implement Standard JSON Schema` | The schema validates values but cannot export JSON Schema. | Upgrade the schema library or use a schema that implements `~standard.jsonSchema`. |
+| Callback never runs | Tool arguments failed `inputSchema` validation. | Inspect the tool error, then fix the caller or the schema. |
+| `has an output schema but no structured content was provided` | A successful path omitted `structuredContent`. | Return a value that matches `outputSchema`, or remove the output schema. |
+| `Invalid structured content` or `Invalid output` | The returned value does not match `outputSchema`. | Validate the handler result in a unit test and fix the schema or payload. |
+| TypeScript accepts a handler but bad input reaches business logic | A low-level `oncalltool` handler used a type assertion instead of runtime validation. | Parse `params.arguments` with a runtime schema before using it. |
+| A non-object result changes shape on older connections | The result uses a modern array, scalar, or null root. | Wrap it in an object for cross-version MCP App support. |
+
+## Test the Contract
+
+Test the schema boundary without rendering the View:
+
+```ts
+import { expect, test } from 'sunpeak/test';
+
+test('search-catalog validates input and output', async ({ mcp }) => {
+  const result = await mcp.callTool('search-catalog', {
+    query: 'lamp',
+    limit: 5,
+  });
+
+  await expect(result).not.toBeError();
+  expect(result.structuredContent).toEqual(
+    expect.objectContaining({ items: expect.any(Array) })
+  );
+});
+```
+
+Add a negative case for rejected input, and keep a success case for every handler branch that
+returns different structured data.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="registerAppTool" icon="wrench" href="/mcp-apps/server/register-app-tool">
+    Register a server tool that renders a View.
+  </Card>
+  <Card title="App-Side Tools" icon="window" href="/mcp-apps/app/app-tools">
+    Let the host call tools exposed by a View.
+  </Card>
+  <Card
+    title="Tool Results and Model Context"
+    icon="database"
+    href="/mcp-apps/server/tool-results-model-context"
+  >
+    Decide what belongs in content, structuredContent, and _meta.
+  </Card>
+  <Card
+    title="MCP Tools"
+    icon="brackets-curly"
+    href="/mcp-apps/mcp/tools"
+  >
+    Review the core tools/list and tools/call contract.
+  </Card>
+</CardGroup>
+
+The [MCP tools specification](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)
+defines the wire-level JSON Schema and validation requirements. The [MCP Apps SDK 2.0 migration
+guide](https://apps.extensions.modelcontextprotocol.io/api/documents/migrate-to-v2.html#tool-schemas-standard-schema-with-json-schema)
+lists the runtime schema requirements.

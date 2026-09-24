@@ -98,6 +98,12 @@ const insertHandle = app.registerTool(
 );
 ```
 
+The schema must support both Standard Schema validation and JSON Schema export. The SDK validates
+arguments before the callback, validates successful `structuredContent` when you add
+`outputSchema`, and exports both schemas to the host. See [Tool
+Schemas](/mcp-apps/server/tool-schemas#app-side-tool-schemas) for a complete input and output
+example.
+
 The returned handle exposes lifecycle methods:
 
 | Method | Effect |
@@ -248,4 +254,5 @@ await app.connect();
 - [`registerTool`](/mcp-apps/app/requests#registertool) — dynamic registry on the `App`
 - [`sendToolListChanged`](/mcp-apps/app/requests#sendtoollistchanged) — notify the host of changes
 - [Tool `_meta`](/mcp-apps/server/tool-meta) — visibility and resource linkage
+- [Tool Schemas](/mcp-apps/server/tool-schemas) — input, output, and runtime validation
 - [`useAppTools`](/app-framework/hooks/use-app-tools) and [`useRegisterTool`](/app-framework/hooks/use-register-tool) — sunpeak React wrappers
