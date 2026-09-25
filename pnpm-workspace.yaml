@@ -15,6 +15,9 @@ minimumReleaseAgeExclude:
   - browserslist@4.29.1
   - hono@4.13.9
   - vite@8.3.1
+  - '@vitest/mocker@5.0.2'
+  - '@vitest/spy@5.0.2'
+  - vitest@5.0.2
 overrides:
   '@hono/node-server': 2.1.1
   body-parser: 2.3.0

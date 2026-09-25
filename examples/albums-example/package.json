@@ -18,7 +18,7 @@
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.6.0",
     "embla-carousel-wheel-gestures": "^8.1.0",
-    "sunpeak": "^0.20.87",
+    "sunpeak": "^0.20.88",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.5"
   },
@@ -39,6 +39,6 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vite": "8.3.1",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.2"
   }
 }
