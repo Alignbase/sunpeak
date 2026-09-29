@@ -18,6 +18,9 @@ minimumReleaseAgeExclude:
   - '@vitest/mocker@5.0.2'
   - '@vitest/spy@5.0.2'
   - vitest@5.0.2
+  - '@modelcontextprotocol/client@2.2.0'
+  - '@modelcontextprotocol/core@2.2.0'
+  - '@modelcontextprotocol/server@2.2.0'
 overrides:
   '@hono/node-server': 2.1.1
   body-parser: 2.3.0

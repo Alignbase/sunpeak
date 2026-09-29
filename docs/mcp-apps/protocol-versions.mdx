@@ -28,7 +28,7 @@ This distinction matters when an app works as a normal MCP tool but its UI does 
 | -------------------- | ----------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------- |
 | Core MCP protocol    | Latest: `2026-07-28`; sunpeak HTTP wrappers: `2025-11-25` | Host ↔ MCP server requests                         | Tools, resources, transport, and core MCP capabilities              |
 | MCP Apps protocol    | `2026-01-26`                                          | View ↔ Host `ui/initialize`                           | View lifecycle, host context, app capabilities, and `ui/*` messages |
-| MCP Apps SDK package | `2.0.0`                                               | `package.json`                                        | The implementation, peer dependencies, and TypeScript APIs          |
+| MCP Apps SDK package | `2.0.3`                                               | `package.json`                                        | The implementation, peer dependencies, and TypeScript APIs          |
 | Your app version     | `1.4.0`                                               | `appInfo.version`                                     | Your View's identity, not protocol compatibility                    |
 
 The date-based protocol versions are independent. A Host can support a given core MCP version without supporting MCP Apps, and an MCP Apps-capable Host may expose only some optional View APIs.
