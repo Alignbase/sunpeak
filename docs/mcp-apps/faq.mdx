@@ -40,7 +40,7 @@ Tools still work. MCP Apps is built for graceful degradation: a host that can't 
 </Accordion>
 
 <Accordion title="How does a server deliver a UI to the host?">
-The server declares UI resources as HTML templates under the `ui://` URI scheme with the `text/html;profile=mcp-app` MIME type, then links a tool to its template through [resource metadata](/mcp-apps/server/register-app-resource). Declaring templates upfront lets hosts prefetch and cache them, keeps presentation separate from data, and lets hosts review the UI during connection setup. See [MCP resources](/mcp-apps/mcp/resources) and [resource metadata](/mcp-apps/server/resource-meta).
+The server links a tool to a `ui://` HTML resource through the tool's `_meta.ui.resourceUri`. The host reads that URI with `resources/read` and renders the returned `text/html;profile=mcp-app` document. A server may omit UI-only resources from `resources/list`; the tool metadata is enough for discovery. Hosts may prefetch and cache the HTML. See [MCP resources](/mcp-apps/mcp/resources) and [resource metadata](/mcp-apps/server/resource-meta).
 </Accordion>
 
 <Accordion title="How does the UI communicate with the host?">

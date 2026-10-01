@@ -403,7 +403,8 @@
               "mcp-apps/sdk-v2-migration",
               "mcp-apps/layout",
               "mcp-apps/patterns",
-              "mcp-apps/faq"
+              "mcp-apps/faq",
+              "mcp-apps/troubleshooting"
             ]
           },
           {

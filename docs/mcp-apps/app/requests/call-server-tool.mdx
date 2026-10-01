@@ -106,15 +106,23 @@ if (!result.isError && result.structuredContent) {
 Pass an `AbortSignal` to cancel long-running tool calls:
 
 ```ts
+const cancelButton = document.querySelector<HTMLButtonElement>("#cancel")!;
 const controller = new AbortController();
+const cancel = () => controller.abort();
+cancelButton.addEventListener("click", cancel);
 
-const result = await app.callServerTool(
-  { name: "generate_report", arguments: { year: 2025 } },
-  { signal: controller.signal },
-);
-
-// Cancel from a UI button
-cancelButton.addEventListener("click", () => controller.abort());
+try {
+  const result = await app.callServerTool(
+    { name: "generate_report", arguments: { year: 2025 } },
+    { signal: controller.signal },
+  );
+  if (result.isError) console.error(result.content);
+  else console.log(result.structuredContent);
+} catch (error) {
+  if (!controller.signal.aborted) console.error(error);
+} finally {
+  cancelButton.removeEventListener("click", cancel);
+}
 ```
 
 <Note>

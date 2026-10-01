@@ -1,0 +1,60 @@
+---
+title: 'Troubleshoot MCP Apps That Do Not Render'
+sidebarTitle: 'Troubleshooting'
+description: 'Debug an MCP App when the tool works but its UI is blank, the iframe never opens, assets fail to load, or a View cannot call a server tool.'
+keywords:
+  [
+    'MCP App not rendering',
+    'MCP App blank iframe',
+    'MCP App resourceUri',
+    'MCP App resources/read',
+    'MCP App CSP error',
+    'MCP App callServerTool error',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+Follow the tool call through four boundaries: tool discovery, resource read, iframe startup, and View requests. Check the first boundary that fails before changing View code.
+
+## Tool runs, but no View opens
+
+Inspect the tool returned by `tools/list` on a connection to an MCP Apps host. The UI-launching tool needs `_meta.ui.resourceUri`, and the URI must identify a resource the same server can read:
+
+```json
+{
+  "name": "show-orders",
+  "_meta": {
+    "ui": { "resourceUri": "ui://orders/view.html" }
+  }
+}
+```
+
+The host must advertise the `io.modelcontextprotocol/ui` capability with `text/html;profile=mcp-app` support. If your server registers different tools for UI-capable and text-only clients, verify which branch ran. See [capability detection](/mcp-apps/server/capability-detection).
+
+Call `resources/read` for the exact `resourceUri`. Its content item needs a matching `uri`, the MIME type `text/html;profile=mcp-app`, and HTML in `text` or base64-encoded `blob`. UI-only resources may be absent from `resources/list`; that alone does not explain a missing View. See the [tool and resource contract](/mcp-apps/server/tool-resource-contract).
+
+## View opens, but is blank
+
+First inspect the View's browser console and failed network requests. A valid HTML response can still fail when its JavaScript, CSS, or API calls are blocked by the host's content security policy.
+
+| Browser symptom | Check |
+| --- | --- |
+| Script, image, font, or stylesheet blocked | Add its origin to `resourceDomains` in the resource content item's `_meta.ui.csp`. |
+| `fetch`, XHR, or WebSocket blocked | Add the API origin to `connectDomains`. |
+| Nested iframe blocked | Add its origin to `frameDomains`. |
+| Request passes CSP but fails CORS | Configure the API's allowed origins; use a stable `_meta.ui.domain` when the host supports it. |
+
+Set CSP on the `resources/read` content item, not on the tool result. Hosts may restrict access further, so check the actual browser error before widening the allowlist. See [CSP and CORS](/mcp-apps/server/csp-cors).
+
+If assets loaded, confirm the View calls `app.connect()` and registers tool input and result handlers before connecting. The View uses the `ui/initialize` handshake with the host; that is separate from the host's core MCP connection to the server. See the [lifecycle](/mcp-apps/lifecycle).
+
+## View renders, but data or actions fail
+
+Check the result from `tools/call`. Put data the View needs in `structuredContent`, keep readable `content` for text-only clients, and make successful `structuredContent` match any declared `outputSchema`. A View should check `isError` before using a tool result. See [tool schemas](/mcp-apps/server/tool-schemas) and [result channels](/mcp-apps/server/content-structuredcontent-meta).
+
+For a View-initiated `callServerTool()` request, confirm the tool exists on the same MCP server and its `_meta.ui.visibility` includes `"app"`. A tool with `visibility: ["model"]` cannot be called by the View. An app-only helper uses `visibility: ["app"]` so the model does not see it. See [tool visibility](/mcp-apps/server/tool-meta) and [`callServerTool()`](/mcp-apps/app/requests/call-server-tool).
+
+## Reproduce the failure locally
+
+Run `sunpeak inspect --server <your-mcp-url>` and call the same tool. Compare `tools/list`, `resources/read`, the tool result, browser console, and failed requests. If it works in the inspector but fails in a real host, compare the host's advertised capabilities and its actual CSP or permission decision. The [MCP Apps specification](https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx) defines the tool, resource, and View handshake requirements; hosts may apply additional restrictions.
