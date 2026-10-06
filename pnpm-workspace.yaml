@@ -7,9 +7,9 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@ai-sdk/gateway@4.0.103'
   - ai@7.0.127
-  - '@modelcontextprotocol/client@2.2.0'
-  - '@modelcontextprotocol/core@2.2.0'
-  - '@modelcontextprotocol/server@2.2.0'
+  - '@modelcontextprotocol/client@2.2.0 || 2.3.1'
+  - '@modelcontextprotocol/core@2.2.0 || 2.3.1'
+  - '@modelcontextprotocol/server@2.2.0 || 2.3.1'
   - '@types/node@26.6.4'
 overrides:
   '@hono/node-server': 2.1.3

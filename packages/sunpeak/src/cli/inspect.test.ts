@@ -577,13 +577,13 @@ describe('inspect endpoint security helpers', () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
-  it('allows hosted-mode redirects to public URLs', async () => {
+  it('allows hosted-mode redirects within the same origin', async () => {
     const { _securityTestExports } = await importInspectCommand();
     const fetchFn = vi.fn(async (url: string) => {
       if (url === 'https://mcp.example.com/mcp') {
         return new Response(null, {
           status: 307,
-          headers: { Location: 'https://api.example.com/mcp/' },
+          headers: { Location: 'https://mcp.example.com/mcp/' },
         });
       }
       return new Response(null, { status: 200 });
@@ -595,7 +595,44 @@ describe('inspect endpoint security helpers', () => {
         fetchFn,
         lookupFn: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
       })
-    ).resolves.toBe('https://api.example.com/mcp/');
+    ).resolves.toBe('https://mcp.example.com/mcp/');
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not send configured credentials to a cross-origin MCP redirect', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(null, {
+          status: 307,
+          headers: { Location: 'https://other.example.com/mcp' },
+        })
+    );
+
+    await expect(
+      _securityTestExports.resolveHttpRedirectsForMcp('https://mcp.example.com/mcp', {
+        fetchFn,
+        requestInit: { headers: { Authorization: 'Bearer test-token' } },
+      })
+    ).rejects.toThrow('MCP endpoint redirected to another origin');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows an MCP redirect that upgrades the same host to HTTPS', async () => {
+    const { _securityTestExports } = await importInspectCommand();
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 308,
+          headers: { Location: 'https://mcp.example.com/mcp/' },
+        })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+    await expect(
+      _securityTestExports.resolveHttpRedirectsForMcp('http://mcp.example.com/mcp', { fetchFn })
+    ).resolves.toBe('https://mcp.example.com/mcp/');
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
@@ -649,7 +686,7 @@ describe('inspect endpoint security helpers', () => {
       'https://mcp.example.com/mcp',
       expect.objectContaining({
         method: 'HEAD',
-        redirect: 'follow',
+        redirect: 'manual',
         headers: { Authorization: 'Bearer test-token' },
       })
     );

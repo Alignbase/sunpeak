@@ -276,6 +276,7 @@ Test any MCP server in replicated ChatGPT and Claude runtimes. No sunpeak projec
 - **CLI**: `sunpeak inspect --server <url>` or `sunpeak inspect --server "python server.py"`. Supports `--env KEY=VALUE` (repeatable) and `--cwd <path>` for stdio servers.
 - **Programmatic**: `inspectServer()` from `sunpeak/inspect` lets other frameworks start the inspector from their own CLI.
 - **OAuth**: Auto-negotiates MCP OAuth when servers return 401. Handles anonymous/auto-approved OAuth without user interaction. For interactive OAuth, opens the authorization URL in the user's browser and waits for the callback. Uses the MCP SDK's standard `OAuthClientProvider` interface.
+- **MCP endpoint redirects**: `sunpeak inspect` probes HTTP endpoints before connecting. Keep redirects on the same origin or allow an HTTP-to-HTTPS upgrade on the same host. Never carry user-supplied authorization headers to a different origin through that probe; users can supply the final endpoint URL explicitly.
 - Built into `sunpeak dev` for app framework users.
 
 ## Documentation (`docs/`)

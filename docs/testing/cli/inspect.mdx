@@ -56,6 +56,10 @@ sunpeak inspect --server http://localhost:8000/mcp --simulations tests/simulatio
 - **HTTP/SSE**: URLs starting with `http://` or `https://` connect via Streamable HTTP transport
 - **Stdio**: Any other string is parsed as a shell command and connects via stdio transport (e.g., `"python my_server.py"`, `"node server.js"`)
 
+For HTTP servers, redirects may change the path on the same origin or upgrade that host from HTTP
+to HTTPS. If the endpoint redirects to another origin, pass the destination URL to `--server`
+directly so authorization headers are never forwarded through an unexpected redirect.
+
 ## Authentication
 
 sunpeak auto-negotiates MCP OAuth when the server returns 401 Unauthorized and publishes standard MCP OAuth metadata. If you already have a token, pass it as an HTTP header:

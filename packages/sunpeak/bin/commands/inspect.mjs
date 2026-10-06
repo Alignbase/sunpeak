@@ -1210,20 +1210,6 @@ async function resolveHttpRedirectsForMcp(
   serverArg,
   { enforcePublicHttpUrl = false, fetchFn = fetch, lookupFn = dnsLookup, requestInit } = {}
 ) {
-  if (!enforcePublicHttpUrl) {
-    try {
-      const probeResponse = await fetchFn(serverArg, {
-        ...(requestInit ?? {}),
-        method: 'HEAD',
-        redirect: 'follow',
-      });
-      await probeResponse.body?.cancel?.();
-      return probeResponse.url && probeResponse.url !== serverArg ? probeResponse.url : serverArg;
-    } catch {
-      return serverArg;
-    }
-  }
-
   let currentUrl = serverArg;
   const maxRedirects = 5;
   for (let i = 0; i < maxRedirects; i++) {
@@ -1246,7 +1232,19 @@ async function resolveHttpRedirectsForMcp(
     }
 
     const nextUrl = new URL(location, currentUrl).toString();
-    await assertHttpServerUrlAllowed(nextUrl, { lookupFn });
+    if (enforcePublicHttpUrl) await assertHttpServerUrlAllowed(nextUrl, { lookupFn });
+    const current = new URL(currentUrl);
+    const next = new URL(nextUrl);
+    const sameOrigin = next.origin === current.origin;
+    const secureUpgrade =
+      current.protocol === 'http:' &&
+      next.protocol === 'https:' &&
+      current.hostname === next.hostname &&
+      !current.port &&
+      !next.port;
+    if (!sameOrigin && !secureUpgrade) {
+      throw new Error('MCP endpoint redirected to another origin; use the destination URL directly');
+    }
     currentUrl = nextUrl;
   }
 
