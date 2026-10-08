@@ -90,7 +90,7 @@ When a user selects an album, the resource:
 
 ## State Management
 
-The resource uses `useAppState()` to persist the selected album across sessions:
+The resource uses `useAppState()` to keep the selected album in the current View and share that selection with the model on a later turn:
 
 ```tsx
 interface AlbumsState {

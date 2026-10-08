@@ -97,7 +97,7 @@ When the user clicks the fullscreen button or selects a place, the resource:
 
 ## State Management
 
-The resource uses `useAppState()` to persist the selected place across sessions:
+The resource uses `useAppState()` to keep the selected place in the current View and share it with the model on a later turn:
 
 ```tsx
 interface MapState {

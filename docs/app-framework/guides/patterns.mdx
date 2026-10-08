@@ -297,49 +297,11 @@ await sendMessage({
 
 ## Persisting view state
 
-For recoverable state (current page, camera position, scroll position), use `localStorage` with a server-provided `viewUUID`.
+`useAppState()` keeps state in the current View and shares updates with the model. It does not restore state when the host creates a new iframe. Save decisions, drafts, or reading progress through server tools keyed by an authenticated user and a stable record ID, then reload them when the View starts.
 
-**Server-side** — include a `viewUUID` in the tool result `_meta`:
+For a noncritical preference such as a page number, browser storage can be a convenience when the host allows it. Key it by a stable document ID, handle storage failures, and do not assume the value survives a change of host or sandbox origin. A fresh `crypto.randomUUID()` on each tool call cannot retrieve the previous value.
 
-```ts
-export default async function (args: { documentId: string }) {
-  return {
-    structuredContent: { url: args.documentId, pageCount: 42 },
-    _meta: { viewUUID: crypto.randomUUID() },
-  };
-}
-```
-
-**Client-side** — save and restore state using the UUID as a storage key:
-
-```tsx
-const { output } = useToolData<Input, Output>();
-const [viewUUID, setViewUUID] = useState<string>();
-
-// Capture viewUUID from tool result _meta
-// (access via useApp() + app.ontoolresult for _meta access)
-const app = useApp();
-useEffect(() => {
-  if (!app) return;
-  const prev = app.ontoolresult;
-  app.ontoolresult = (result) => {
-    prev?.(result);
-    if (result._meta?.viewUUID) setViewUUID(String(result._meta.viewUUID));
-  };
-}, [app]);
-
-// Save/restore with localStorage
-useEffect(() => {
-  if (!viewUUID) return;
-  const saved = localStorage.getItem(viewUUID);
-  if (saved) setCurrentPage(JSON.parse(saved).page);
-}, [viewUUID]);
-
-const savePage = (page: number) => {
-  setCurrentPage(page);
-  if (viewUUID) localStorage.setItem(viewUUID, JSON.stringify({ page }));
-};
-```
+See [MCP App State Persistence](/mcp-apps/state-persistence) for the storage choices and a load/save tool example.
 
 ## Pausing offscreen views
 

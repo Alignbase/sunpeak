@@ -89,10 +89,10 @@ function EditorResource() {
 | Automatic sync | Yes — syncs on every state change | No — you call it explicitly |
 | Content types | Structured data only | Text blocks + structured data |
 | State management | Built-in (like `useState`) | Bring your own |
-| Use case | Simple persistent state | Custom sync logic, text content |
+| Use case | View state shared with the model | Custom sync logic, text content |
 
 ## See Also
 
 <Card horizontal title="useAppState" icon="database" href="/app-framework/hooks/use-app-state">
-  Automatic state persistence and sync.
+  React state with automatic model-context sync. It resets when the View remounts.
 </Card>

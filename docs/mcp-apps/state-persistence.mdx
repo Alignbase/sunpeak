@@ -1,0 +1,81 @@
+---
+title: 'MCP App State Persistence and Model Context'
+sidebarTitle: 'State Persistence'
+description: 'Choose where MCP App state belongs: View memory, updateModelContext, browser storage, or server tools. Restore state when a host recreates the iframe.'
+keywords:
+  [
+    'MCP App state persistence',
+    'MCP App restore state',
+    'MCP App localStorage',
+    'MCP App updateModelContext',
+    'MCP App iframe state',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+A host can tear down and recreate an MCP App View. Decide which state should survive before choosing a storage API. The MCP Apps `2026-01-26` protocol does not define a general state restoration API; it lists persistence and restoration as future work. [`updateModelContext()`](/mcp-apps/app/requests/update-model-context) shares context with the model on later turns, but it is not a durable store for the View.
+
+## Choose a state owner
+
+| State | Use | What to expect |
+| --- | --- | --- |
+| Open menu, hover state, unsaved input | View memory, such as React state | Lost when the iframe is recreated. |
+| Selected item or filter the model needs on the next turn | `updateModelContext()` | The host may pass it to the model later. Each update replaces the View's previous context. Do not use it to restore the UI. |
+| Small, noncritical preference for one sandbox origin | Browser storage, if available | May disappear when storage is cleared or the host changes the View's origin. It does not travel across hosts or devices. |
+| Draft, decision, or progress that must survive a new View or device | Your server's storage, accessed through MCP tools | The server can reload it after authentication and authorization. |
+
+Keep account data and saved work on the server. Store a stable record ID in the tool input or result, then use that ID for later reads and writes. A fresh random ID on every tool call cannot identify the same record after a reload.
+
+## Restore durable state through tools
+
+Register app-only tools for loading and saving state, with `_meta.ui.visibility: ["app"]`. The View calls them through the host with [`callServerTool()`](/mcp-apps/app/requests/call-server-tool):
+
+```ts
+const loaded = await app.callServerTool({
+  name: 'load-reading-position',
+  arguments: { documentId },
+});
+
+if (loaded.isError) {
+  showLoadError(loaded.content);
+} else {
+  renderPosition(loaded.structuredContent);
+}
+
+const saved = await app.callServerTool({
+  name: 'save-reading-position',
+  arguments: { documentId, page: currentPage },
+});
+
+if (saved.isError) showSaveError(saved.content);
+```
+
+The server must check that the authenticated user can read or change `documentId` on every call. Tool visibility controls whether the model or View can call a tool; it does not authorize access to records. See [Tool `_meta`](/mcp-apps/server/tool-meta) and the [MCP Apps Security Model](/mcp-apps/security).
+
+Keep the `ui://` HTML resource independent of the user's saved state. Hosts may cache the resource; return user data from tool calls instead.
+
+## Share only model-relevant state
+
+After a selection changes, call `updateModelContext()` when the model needs to understand it on the next turn:
+
+```ts
+await app.updateModelContext({
+  structuredContent: {
+    selectedDocumentId: documentId,
+    page: currentPage,
+  },
+});
+```
+
+Send the whole context the model needs each time because an update replaces the View's previous context. The host may defer delivery until the next user message. Do not send private data that the model should not read. In sunpeak, [`useAppState()`](/app-framework/hooks/use-app-state) pairs React state with this context update; it does not reload state after the View is destroyed.
+
+## Use browser storage only as a fallback
+
+Browser storage can remember a harmless UI preference within the same sandbox origin. Check that it is available, handle storage errors, and use a stable key such as a document ID. Do not put tokens, drafts, or other sensitive data there. Host-specific sandbox origins and storage policies mean a value saved in one host may not exist in another.
+
+For a View that must work across hosts or devices, restore from server tools and treat browser storage as an optional convenience.
+
+## Primary reference
+
+The [MCP Apps `2026-01-26` specification](https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx) defines `ui/update-model-context` and lists state persistence and restoration as future work.

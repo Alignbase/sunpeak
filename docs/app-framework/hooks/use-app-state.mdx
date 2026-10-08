@@ -1,7 +1,7 @@
 ---
 title: "useAppState"
 description: "UI state synced to the host and made visible to the model."
-keywords: ["MCP Apps", "ChatGPT Apps", "React hooks", "app state", "persistent state"]
+keywords: ["MCP Apps", "ChatGPT Apps", "React hooks", "app state", "model context"]
 ---
 
 <Badge color="yellow">sunpeak API</Badge>
@@ -9,6 +9,10 @@ keywords: ["MCP Apps", "ChatGPT Apps", "React hooks", "app state", "persistent s
 ## Overview
 
 Manages UI state that is automatically synced to the host via [`updateModelContext`](/mcp-apps/app/requests/update-model-context). Works like React's `useState`, but each update is pushed to the host so the AI model can see it on the next message. Use this for user decisions, selections, or any state the model should be aware of.
+
+The hook starts from `defaultState` whenever the View mounts. It does not restore state after the host recreates the iframe. For durable data, save and reload it through server tools. See [MCP App State Persistence](/mcp-apps/state-persistence).
+
+Use an object-shaped state value. The hook sends it as `updateModelContext().structuredContent`, which the MCP Apps protocol defines as an object.
 
 <Card horizontal title="Wraps updateModelContext" icon="cube" href="/mcp-apps/app/requests/update-model-context">
   MCP Apps SDK reference

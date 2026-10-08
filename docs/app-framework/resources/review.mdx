@@ -13,7 +13,7 @@ keywords: ["MCP Apps", "ChatGPT Apps", "UI components", "review dialog", "confir
 
 `Review` is a production-ready review resource included in the sunpeak framework. It provides a flexible confirmation dialog that adapts to various use cases including purchase reviews, code change approvals, social media post previews, booking confirmations, and generic action reviews.
 
-The resource uses `useToolData().output` for configuration data and `useAppState()` to persist the user's decision across sessions.
+The resource uses `useToolData().output` for configuration data and `useAppState()` to keep the user's decision in the current View and share it with the model.
 
 ## Data Structure
 
@@ -160,7 +160,7 @@ interface ReviewTool {
 
 ## State Management
 
-The resource uses `useAppState()` to persist the user's decision:
+The resource uses `useAppState()` to keep the user's decision in the current View and share it with the model on a later turn:
 
 ```tsx
 interface ReviewState {
