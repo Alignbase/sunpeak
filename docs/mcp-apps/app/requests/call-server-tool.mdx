@@ -60,7 +60,7 @@ async callServerTool(
   </ResponseField>
 
   <ResponseField name="structuredContent" type="unknown">
-    Structured output if the tool defines an `outputSchema`. Parsed and validated by the server.
+    Structured output when the tool returns it. If the tool declares an `outputSchema`, successful structured output must match that schema.
   </ResponseField>
 
   <ResponseField name="isError" type="boolean">
@@ -87,7 +87,7 @@ if (result.isError) {
 
 ### Using structured content
 
-When the server tool defines an `outputSchema`, the parsed result is available on `structuredContent`:
+When the server tool returns structured output, it is available on `structuredContent`. A declared `outputSchema` constrains its shape:
 
 ```ts
 const result = await app.callServerTool({

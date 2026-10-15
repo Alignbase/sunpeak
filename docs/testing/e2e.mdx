@@ -130,10 +130,14 @@ test('search tool returns results', async ({ mcp }) => {
   expect(result.structuredContent.results.length).toBeGreaterThan(0);
 });
 
-test('resources have correct metadata', async ({ mcp }) => {
-  const resources = await mcp.listResources();
-  const app = resources.find(r => r.name === 'search-results');
-  expect(app?.mimeType).toBe('text/html');
+test('UI tool links to readable HTML', async ({ mcp }) => {
+  const tools = await mcp.listTools();
+  const search = tools.find(t => t.name === 'search');
+  expect(search?._meta).toMatchObject({
+    ui: { resourceUri: 'ui://search/results.html' },
+  });
+  const html = await mcp.readResource('ui://search/results.html');
+  expect(html).toContain('<html');
 });
 ```
 

@@ -1,0 +1,85 @@
+---
+title: 'Test an MCP App Tool and View'
+sidebarTitle: 'Testing'
+description: 'Test an MCP App end to end: verify tool metadata, read the ui:// HTML resource, call the tool, and assert that its View renders in a host iframe.'
+keywords:
+  [
+    'test MCP App',
+    'MCP App testing',
+    'MCP App Playwright test',
+    'MCP Apps resources/read',
+    'MCP App iframe test',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+An MCP App has two connections to test. The Host uses core MCP to discover and call the tool and read its HTML resource. The View then connects to the Host inside an iframe. A passing tool call alone does not prove that the View can load or receive its result.
+
+## Check the protocol contract
+
+Connect with an MCP Apps-capable client and check these operations in order:
+
+| Operation | Assertion |
+| --- | --- |
+| `initialize` | The client advertises `io.modelcontextprotocol/ui` with `text/html;profile=mcp-app` in `mimeTypes`. A server may offer a text-only fallback to clients without that capability. |
+| `tools/list` | The UI tool has `_meta.ui.resourceUri` with a `ui://` URI. An app-only helper has `_meta.ui.visibility: ["app"]`. |
+| `resources/read` | Reading the exact tool URI returns a matching `uri`, `mimeType: "text/html;profile=mcp-app"`, and a valid HTML document in `text` or base64-encoded `blob`. Do not rely on `resources/list`: a tool-linked UI resource may be absent there. |
+| `tools/call` | The tool returns usable `content` for text clients, and any `structuredContent` matches its declared `outputSchema`. A tool execution failure returns `isError: true`. |
+
+The [tool and resource contract](/mcp-apps/server/tool-resource-contract) has the fields to inspect. If one operation fails, fix that boundary before debugging the iframe.
+
+## Render the View
+
+Start an inspector connected to your MCP server:
+
+```bash
+npx sunpeak inspect --server http://localhost:8000/mcp
+```
+
+For a stdio server, pass its launch command instead of a URL, for example `--server "python server.py"`. Select the UI tool and call it with representative arguments. In the rendered View, check that:
+
+- The HTML loads and `app.connect()` completes the `ui/initialize` handshake.
+- The View receives its tool input and result, including an error result when the tool returns `isError: true`.
+- Buttons that call the server use tools whose visibility includes `"app"`.
+- External scripts, images, and requests load under the resource's declared CSP.
+- The View remains usable in each host mode, theme, and display mode your app supports.
+
+If the tool works but the View is blank, use the [rendering troubleshooting guide](/mcp-apps/troubleshooting) to locate the failing boundary.
+
+## Automate the check with Playwright
+
+The `sunpeak/test` fixtures can test any MCP server, including one written outside sunpeak. Configure the server as shown in [testing setup](/testing/getting-started), then add a test for a real UI tool:
+
+```ts
+import { test, expect } from 'sunpeak/test';
+
+const resourceUri = 'ui://orders/view.html';
+
+test('orders tool links to a readable View', async ({ mcp }) => {
+  const tools = await mcp.listTools();
+  const tool = tools.find((item) => item.name === 'show-orders');
+
+  expect(tool?._meta).toMatchObject({
+    ui: { resourceUri },
+  });
+
+  const html = await mcp.readResource(resourceUri);
+  expect(html).toContain('<html');
+
+  const result = await mcp.callTool('show-orders', { status: 'open' });
+  expect(result.isError).toBeFalsy();
+  expect(result.structuredContent).toMatchObject({ orders: expect.any(Array) });
+});
+
+test('orders View renders the tool result', async ({ inspector }) => {
+  const result = await inspector.renderTool('show-orders', { status: 'open' });
+  await expect(result.app().getByText('Open orders')).toBeVisible();
+});
+```
+
+Replace the URI, arguments, and UI assertion with values from your server. Passing input to `renderTool()` calls the real server. Without input, the fixture may use a saved simulation, which is useful for repeatable UI states but does not verify the live handler. The fixture's `readResource()` returns HTML text, so inspect the raw MCP `resources/read` response separately when you need to assert its MIME type or `_meta.ui` security fields.
+
+Run `npx sunpeak test --e2e` to execute these tests in the configured host projects. Add a test for an app-only helper and one for a tool error if your View depends on those paths. For host behavior that a local runtime cannot reproduce, use [live tests](/testing/live) against the real host.
+
+See [MCP Apps lifecycle](/mcp-apps/lifecycle) for the message sequence and [E2E testing](/testing/e2e) for more fixture options.

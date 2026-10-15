@@ -404,6 +404,7 @@
               "mcp-apps/layout",
               "mcp-apps/patterns",
               "mcp-apps/state-persistence",
+              "mcp-apps/testing",
               "mcp-apps/faq",
               "mcp-apps/troubleshooting"
             ]
