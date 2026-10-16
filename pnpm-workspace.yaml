@@ -5,17 +5,20 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
 minimumReleaseAgeExclude:
-  - '@ai-sdk/anthropic@4.0.78'
-  - '@ai-sdk/gateway@4.0.110'
-  - '@ai-sdk/openai@4.0.91'
-  - '@ai-sdk/provider-utils@5.0.58'
-  - '@ai-sdk/provider@4.0.26'
-  - ai@7.0.136
+  - '@ai-sdk/anthropic@4.0.78 || 4.0.81'
+  - '@ai-sdk/gateway@4.0.110 || 4.0.115'
+  - '@ai-sdk/openai@4.0.91 || 4.0.95'
+  - '@ai-sdk/provider-utils@5.0.58 || 5.0.61'
+  - '@ai-sdk/provider@4.0.26 || 4.0.28'
+  - ai@7.0.136 || 7.0.142
   - '@modelcontextprotocol/client@2.2.0 || 2.3.1'
   - '@modelcontextprotocol/core@2.2.0 || 2.3.1'
   - '@modelcontextprotocol/server@2.2.0 || 2.3.1'
-  - happy-dom@20.14.6
+  - happy-dom@20.14.6 || 21.0.3
   - vite@8.3.4
+  - '@vitest/mocker@5.0.5'
+  - '@vitest/spy@5.0.5'
+  - vitest@5.0.5
 overrides:
   '@hono/node-server': 2.1.4
   '@parcel/watcher': 2.6.0
