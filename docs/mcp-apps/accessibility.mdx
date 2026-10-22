@@ -1,0 +1,103 @@
+---
+title: 'MCP App Accessibility: Keyboard, Focus, and Screen Readers'
+sidebarTitle: 'Accessibility'
+description: 'Build accessible MCP App Views inside host iframes with keyboard controls, visible focus, screen-reader status updates, responsive layouts, and reduced motion.'
+keywords:
+  [
+    'MCP App accessibility',
+    'MCP Apps keyboard navigation',
+    'MCP App screen reader',
+    'MCP App iframe focus',
+    'MCP App Playwright accessibility test',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+An MCP App View is an HTML document inside a host-managed iframe. Build its controls with normal web semantics, then test the View in the host shell. The MCP Apps protocol provides [host context](/mcp-apps/app/accessors/get-host-context) such as theme, display mode, and container dimensions; it does not replace keyboard, focus, or screen-reader behavior in your HTML.
+
+## Use native controls in the View
+
+Use `<button>` for actions and labeled form controls for input. Give icon-only buttons an accessible name. This keeps controls operable with a keyboard and exposes their role and name to assistive technology.
+
+```tsx
+<section aria-labelledby="orders-title" aria-busy={loading}>
+  <h2 id="orders-title">Orders</h2>
+  <button
+    type="button"
+    aria-disabled={loading}
+    onClick={() => { if (!loading) void loadNextPage(); }}
+  >
+    Next page
+  </button>
+  <p role="status">{message}</p>
+</section>
+```
+
+Set `message` to a short result such as `Page 2 loaded` or `Could not load orders`. A status region announces routine updates without moving keyboard focus. For a form error, also put a visible message next to the affected field and connect it with `aria-describedby`. Keep error handling for both a tool result with `isError: true` and a rejected View request; see [`callServerTool()`](/mcp-apps/app/requests/call-server-tool).
+
+## Keep focus visible and predictable
+
+Do not remove the browser's focus outline without adding a replacement. The host can supply a focus-ring color, but your View needs a fallback when it does not:
+
+```css
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--color-ring-primary, currentColor);
+  outline-offset: 2px;
+}
+```
+
+When an action updates content in place, leave focus on its button and announce the result through the status region. `aria-disabled` keeps the button focusable during loading; guard the click handler so it cannot start another request. When your View opens its own dialog, move focus into it, keep keyboard focus inside while it is modal, and return focus to the trigger when it closes. See the [WAI-ARIA dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/) for the full interaction rules.
+
+The Host owns focus outside the View's iframe. Test the transition into and out of the iframe in every real Host you support; do not assume your View can focus the Host's chat controls or that every Host uses the same focus order.
+
+## Fit the host container
+
+The Host may render the View inline, fullscreen, or in picture-in-picture mode. It can also change the container dimensions after initialization. Use a layout that can shrink without hiding controls, and respond to [host context changes](/mcp-apps/app/event-handlers/onhostcontextchanged) rather than assuming a fixed width.
+
+```css
+.app-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.app-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decorative-motion {
+    animation: none;
+    transition: none;
+  }
+}
+```
+
+Use the [host styling variables](/mcp-apps/styling/css-variables) with fallback values, and test both light and dark themes. Apply `decorative-motion` only to nonessential animation; keep progress and state understandable when that motion is removed. The browser's `prefers-reduced-motion` media query handles motion preference inside the View without a Host API.
+
+## Test the rendered View
+
+The `sunpeak/test` Inspector fixture returns a locator inside the app iframe. Use role-based queries to check names and keyboard actions against the rendered View:
+
+```ts
+import { test, expect } from 'sunpeak/test';
+
+test('orders can be paged with a keyboard', async ({ inspector }) => {
+  const result = await inspector.renderTool('show-orders', { status: 'open' });
+  const app = result.app();
+  const next = app.getByRole('button', { name: 'Next page' });
+
+  await expect(next).toBeVisible();
+  await app.locator('body').press('Tab');
+  await expect(next).toBeFocused();
+  await next.press('Enter');
+  await expect(app.getByRole('status')).toHaveText('Page 2 loaded');
+});
+```
+
+Replace the tool name and assertions with your app's behavior. Run the test in both configured host projects, then manually check focus entry and exit, zoomed text, and a screen reader in each real Host you support. A passing iframe test cannot prove that the Host manages focus correctly outside your View. See [testing an MCP App](/mcp-apps/testing) for the protocol and rendering checks that go with this UI test.
+
+The [W3C Web Content Accessibility Guidelines](https://www.w3.org/WAI/WCAG22/Understanding/) cover keyboard access, focus visibility, reflow, and status messages in more detail.

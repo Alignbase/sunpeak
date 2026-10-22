@@ -59,34 +59,50 @@ Keep a text `content` block even when the View mostly uses `structuredContent`. 
 
 ## Poll Live Data Deliberately
 
-For dashboards, job progress, or monitoring UIs, poll through an app-only tool. Stop polling during teardown and when the app is hidden or no longer needs updates.
+For dashboards, job progress, or monitoring UIs, poll through an app-only tool. Schedule the next request after the current one completes so slow responses cannot overlap. Stop when the job finishes or the View tears down.
 
 ```ts
-let intervalId: number | undefined;
+let timeoutId: number | undefined;
+let generation = 0;
 
-async function pollStatus() {
-  const result = await app.callServerTool({
-    name: "get-job-status",
-    arguments: { jobId },
-  });
-
-  updateStatus(result.structuredContent);
+async function pollStatus(jobId: string, run: number) {
+  try {
+    const result = await app.callServerTool({
+      name: "get-job-status",
+      arguments: { jobId },
+    });
+    if (run !== generation) return; // A newer job replaced this one.
+    if (result.isError) {
+      showStatusError(result.content);
+      return;
+    }
+    const data = result.structuredContent as { status: string };
+    updateStatus(data);
+    if (!["complete", "failed", "cancelled"].includes(data.status)) {
+      timeoutId = window.setTimeout(() => void pollStatus(jobId, run), 3000);
+    }
+  } catch (error) {
+    if (run === generation) showStatusError(error);
+  }
 }
 
 app.ontoolresult = (result) => {
-  const job = result.structuredContent as { jobId: string };
-  jobId = job.jobId;
-  void pollStatus();
-  intervalId = window.setInterval(pollStatus, 3000);
+  if (result.isError) return;
+  const job = result.structuredContent as { jobId?: string } | undefined;
+  if (!job?.jobId) return;
+  generation += 1;
+  if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  void pollStatus(job.jobId, generation);
 };
 
 app.onteardown = async () => {
-  if (intervalId) window.clearInterval(intervalId);
+  generation += 1;
+  if (timeoutId !== undefined) window.clearTimeout(timeoutId);
   return {};
 };
 ```
 
-Poll only while the View can use the result. If the server can return `complete`, `failed`, or `cancelled`, stop the interval as soon as that status arrives.
+This example stops on a terminal status, a tool error, or teardown. If your View can stay mounted while hidden, add pause and resume behavior using the visibility signals available in your Host. Handle a tool error or rejected request in the View rather than reading `structuredContent` as a successful status.
 
 ## Load Large Data in Chunks
 
