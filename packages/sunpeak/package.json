@@ -1,6 +1,6 @@
 {
   "name": "sunpeak",
-  "version": "0.20.94",
+  "version": "0.20.95",
   "description": "App framework, testing framework, and inspector for MCP Apps.",
   "engines": {
     "node": ">=22.12.0"
