@@ -5,12 +5,12 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
 minimumReleaseAgeExclude:
-  - '@ai-sdk/anthropic@4.0.78 || 4.0.81'
-  - '@ai-sdk/gateway@4.0.110 || 4.0.115'
-  - '@ai-sdk/openai@4.0.91 || 4.0.95'
-  - '@ai-sdk/provider-utils@5.0.58 || 5.0.61'
-  - '@ai-sdk/provider@4.0.26 || 4.0.28'
-  - ai@7.0.136 || 7.0.142
+  - '@ai-sdk/anthropic@4.0.78 || 4.0.81 || 4.0.87'
+  - '@ai-sdk/gateway@4.0.110 || 4.0.115 || 4.0.123'
+  - '@ai-sdk/openai@4.0.91 || 4.0.95 || 4.0.101'
+  - '@ai-sdk/provider-utils@5.0.58 || 5.0.61 || 5.0.67'
+  - '@ai-sdk/provider@4.0.26 || 4.0.28 || 4.0.33'
+  - ai@7.0.136 || 7.0.142 || 7.0.150
   - '@modelcontextprotocol/client@2.2.0 || 2.3.1'
   - '@modelcontextprotocol/core@2.2.0 || 2.3.1'
   - '@modelcontextprotocol/server@2.2.0 || 2.3.1'
@@ -20,16 +20,16 @@ minimumReleaseAgeExclude:
   - '@vitest/spy@5.0.5'
   - vitest@5.0.5
 overrides:
-  '@hono/node-server': 2.1.4
+  '@hono/node-server': 2.1.5
   '@parcel/watcher': 2.6.0
-  body-parser: 2.3.0
+  body-parser: 2.4.0
   brace-expansion: 5.0.12
-  browserslist: 4.29.3
+  browserslist: 4.29.4
   fast-uri: 3.1.8
   hono: 4.13.13
   js-yaml: 4.3.2
   lodash: 4.18.1
   minimatch: 10.2.6
   nanoid: 3.3.19
-  qs: 6.16.0
+  qs: 6.16.1
   source-map-js: 1.2.2
