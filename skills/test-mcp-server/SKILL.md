@@ -94,6 +94,11 @@ test('pip mode (skip on Claude)', async ({ inspector }) => {
 });
 ```
 
+When testing named object output schemas with MCP SDK 2.4, assert against the object in
+`structuredContent` directly, including on `2025-11-25` connections. Non-object legacy results
+still use `{ result: value }`. Invalid URI syntax in `$id` or `$ref` can prevent a tool schema
+from compiling; use valid IDs before diagnosing a missing tool as an inspector failure.
+
 ### `mcp` Fixture API
 
 Protocol-level methods (raw MCP data, no rendering):

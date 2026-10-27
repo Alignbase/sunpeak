@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import { createHandler, createMcpHandler, detectClientFromHeaders } from './production-server.js';
 import type { WebHandlerConfig, ProductionServerConfig } from './production-server.js';
 import type { ToolHandlerExtra } from './types.js';
@@ -92,6 +93,7 @@ describe('createHandler stateless mode', () => {
     });
     const res = await handler(req);
     expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('POST');
   });
 
   it('rejects DELETE requests in stateless mode', async () => {
@@ -99,6 +101,7 @@ describe('createHandler stateless mode', () => {
     const req = new Request('http://localhost:8000/mcp', { method: 'DELETE' });
     const res = await handler(req);
     expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('POST');
   });
 
   it('handles CORS preflight in stateless mode', async () => {
@@ -165,6 +168,33 @@ describe('createHandler stateless mode', () => {
 
     expect(body.error).toBeUndefined();
     expect(body.result.structuredContent).toEqual({ result: ['alpha', 'beta'] });
+  });
+
+  it('preserves object output with named schema definitions on a legacy connection', async () => {
+    const handler = createHandler({
+      ...baseWebConfig,
+      tools: [
+        {
+          name: 'named-output',
+          tool: { description: 'Return a named object schema' },
+          outputSchema: { item: z.object({ title: z.string() }).meta({ id: 'named_item' }) },
+          handler: () => ({ content: [], structuredContent: { item: { title: 'Album' } } }),
+        },
+      ],
+    });
+    const headers = { 'mcp-protocol-version': '2025-11-25' };
+    const listed = await handler(makePostRequest(jsonRpcBody('tools/list'), headers));
+    const listBody = await listed.json();
+    expect(listBody.error).toBeUndefined();
+    expect(listBody.result.tools[0].outputSchema.type).toBe('object');
+
+    const res = await handler(
+      makePostRequest(jsonRpcBody('tools/call', { name: 'named-output' }), headers)
+    );
+    const body = await res.json();
+    expect(body.error).toBeUndefined();
+    expect(body.result.isError).not.toBe(true);
+    expect(body.result.structuredContent).toEqual({ item: { title: 'Album' } });
   });
 
   it('returns 401 when auth rejects', async () => {
@@ -408,6 +438,7 @@ describe('createMcpHandler stateless mode', () => {
         headers: { accept: 'text/event-stream' },
       });
       expect(res.status).toBe(405);
+      expect(res.headers.get('allow')).toBe('POST');
     } finally {
       server.close();
     }

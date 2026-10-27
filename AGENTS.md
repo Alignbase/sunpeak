@@ -328,6 +328,13 @@ This is the upstream SDK that sunpeak wraps. Upgrades often introduce new `App` 
 8. **Keep split SDK packages aligned** — ext-apps 2.x requires the MCP 2.x client and Zod 4.2+. Server helpers also require `@modelcontextprotocol/server`; Node HTTP transport uses `@modelcontextprotocol/node`; runtime protocol schemas come from `@modelcontextprotocol/core`. Do not reintroduce the monolithic `@modelcontextprotocol/sdk`.
 9. **Migrate breaking surfaces** — Wrap raw Zod shapes with `z.object()`, move request fields under `extra.mcpReq`, read HTTP auth from `extra.http?.authInfo`, and remove uses of the deleted `ProtocolWithEvents` class.
 
+### MCP TypeScript SDK 2.4 compatibility
+
+- Keep output data object-shaped for legacy clients. Root `$ref` schemas that resolve to objects now return `structuredContent` directly, without a `result` wrapper. Use valid URI syntax for schema IDs and references.
+- On modern HTTP connections, `x-mcp-header` supports string, integer, and boolean parameters, not number. Use `z.int()` or remove the annotation.
+- Skills over MCP is available through the upstream `ext/skills` subpaths. It is optional and separate from MCP Apps hooks; sunpeak does not automatically publish local skills. `SkillsExtension.attach` is experimental.
+- OAuth `scopeForRefresh` is opt-in on an upstream `OAuthClientProvider`. Do not add refresh scopes by default.
+
 ### SDK Export Structure
 
 The SDK's main entry (`app.d.ts`) uses `export * from "./types"` to re-export all types, schemas, and constants. To discover available exports, check:

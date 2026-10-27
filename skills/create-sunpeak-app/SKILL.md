@@ -166,6 +166,11 @@ export default async function (args: { city: string; units?: string }, extra: To
 `ToolHandlerExtra` follows MCP SDK 2.0: use `extra.mcpReq.signal` for cancellation,
 `extra.mcpReq.id` for the request ID, and `extra.http?.authInfo` for validated HTTP auth.
 
+With MCP SDK 2.4, keep schema IDs valid as URIs (`named_output`, not `named_output:schema`).
+Named object output schemas return their object directly in `structuredContent` on legacy
+connections too. Do not unwrap a `result` property unless your tool actually returns that field.
+For modern HTTP `x-mcp-header` parameters, use strings, `z.int()`, or booleans, not `z.number()`.
+
 ### Backend-Only Tools (Confirmation Loop)
 
 A common pattern pairs a UI tool (for review) with a backend-only tool (for execution). The UI tool's `structuredContent` includes a `reviewTool` field. The resource component reads it and calls the backend tool via `useCallServerTool` when the user confirms:

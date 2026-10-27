@@ -50,6 +50,15 @@ For an app that must work across both core MCP revisions, keep tool result data 
   View data shape on legacy and modern connections.
 </Note>
 
+MCP TypeScript SDK 2.4 recognizes object output schemas that use a root `$ref` into
+`$defs` or `definitions`, including named Zod objects. On legacy connections, read those
+objects directly from `structuredContent`; the SDK no longer adds a `{ result: ... }` wrapper.
+The wrapper still applies to non-object results. sunpeak's file-based output schemas remain raw
+Zod shapes that the framework wraps with `z.object()`.
+
+Schema IDs and references must use valid URI syntax. For example, use `my_tool_output` or
+`urn:example:my-tool-output`, rather than `my_tool:output` (an underscore is invalid in a URI scheme).
+
 This tool result rule does not change `updateModelContext()`. Its `structuredContent` field remains an object in the MCP Apps `2026-01-26` protocol.
 
 ## Recommended Shape

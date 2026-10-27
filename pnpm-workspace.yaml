@@ -19,6 +19,7 @@ minimumReleaseAgeExclude:
   - '@vitest/mocker@5.0.5'
   - '@vitest/spy@5.0.5'
   - vitest@5.0.5
+  - '@modelcontextprotocol/ext-apps@2.0.4'
 overrides:
   '@hono/node-server': 2.1.5
   '@parcel/watcher': 2.6.0

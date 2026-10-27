@@ -943,7 +943,7 @@ export function createMcpHandler(
       if (!ctx) return;
 
       if (req.method !== 'POST') {
-        res.writeHead(405, CORS_HEADERS);
+        res.writeHead(405, { ...CORS_HEADERS, Allow: 'POST' });
         res.end('Method Not Allowed: stateless mode only supports POST');
         return;
       }
@@ -1224,7 +1224,10 @@ export function createHandler(config: WebHandlerConfig): (req: Request) => Promi
 
       if (req.method !== 'POST') {
         return addCorsHeaders(
-          new Response('Method Not Allowed: stateless mode only supports POST', { status: 405 })
+          new Response('Method Not Allowed: stateless mode only supports POST', {
+            status: 405,
+            headers: { Allow: 'POST' },
+          })
         );
       }
 
