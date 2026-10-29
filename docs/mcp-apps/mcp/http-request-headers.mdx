@@ -1,0 +1,84 @@
+---
+title: 'MCP HTTP Request Headers for MCP Apps'
+sidebarTitle: 'HTTP Request Headers'
+description: 'Map MCP 2026-07-28 JSON-RPC requests to Mcp-Method, Mcp-Name, and Mcp-Param-* headers, including x-mcp-header tool arguments and validation.'
+keywords:
+  [
+    'MCP HTTP headers',
+    'MCP Apps HTTP headers',
+    'Mcp-Method',
+    'Mcp-Name',
+    'Mcp-Param',
+    'x-mcp-header',
+    'MCP HeaderMismatch',
+    'MCP Streamable HTTP',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+Core MCP `2026-07-28` lets an HTTP gateway route requests using headers before it reads a JSON-RPC body. This applies to the Host's connection to an MCP server, including requests for MCP App tools and `ui://` resources. The View-to-Host `ui/initialize` exchange uses `postMessage`, so these HTTP headers do not apply to it.
+
+<Note>
+  sunpeak's public HTTP server wrappers currently use the legacy `2025-11-25` transport. The
+  headers on this page describe a server and client using core MCP `2026-07-28`; setting
+  `--stateless` does not switch sunpeak's wire protocol. See [MCP 2026-07-28 for MCP
+  Apps](/mcp-apps/mcp/2026-07-28) for the compatibility boundary.
+</Note>
+
+## Map requests to headers
+
+For each modern Streamable HTTP JSON-RPC request POST, the client sends `MCP-Protocol-Version` and `Mcp-Method` alongside the body. The version must match `_meta["io.modelcontextprotocol/protocolVersion"]`, and the method must match the body method. Some methods also require `Mcp-Name`:
+
+| JSON-RPC method | `Mcp-Method` | `Mcp-Name` value |
+| --- | --- | --- |
+| `tools/call` | `tools/call` | `params.name`, the tool name. |
+| `prompts/get` | `prompts/get` | `params.name`, the prompt name. |
+| `resources/read` | `resources/read` | `params.uri`, the exact resource URI. |
+| Other methods | The JSON-RPC method. | Omit this header. |
+
+For example, reading an MCP App resource with `params.uri: "ui://orders/view.html"` sends `Mcp-Method: resources/read` and `Mcp-Name: ui://orders/view.html`. A gateway can route the resource request by URI without parsing JSON.
+
+## Route on a tool argument with `x-mcp-header`
+
+A tool can annotate a scalar property in its `inputSchema` so a modern HTTP client copies that argument into a `Mcp-Param-*` header. This example makes `region` available to a gateway:
+
+Use this only for routing data that an intermediary may see. Do not annotate passwords, API keys, access tokens, or personal data.
+
+```json
+{
+  "name": "show_orders",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "region": {
+        "type": "string",
+        "x-mcp-header": "Region"
+      }
+    },
+    "required": ["region"]
+  },
+  "_meta": {
+    "ui": { "resourceUri": "ui://orders/view.html" }
+  }
+}
+```
+
+For a call with `params.name: "show_orders"` and `params.arguments.region: "us-east"`, the client sends:
+
+```http
+MCP-Protocol-Version: 2026-07-28
+Mcp-Method: tools/call
+Mcp-Name: show_orders
+Mcp-Param-Region: us-east
+```
+
+The JSON-RPC body still contains the tool name and `region` argument. The header is a copy for routing, not a replacement for server-side input validation. If the argument is absent or `null`, the client omits its parameter header.
+
+An annotated property must have type `string`, `integer`, or `boolean`. Its header suffix must be a valid HTTP field-name token and unique without regard to case. Clients encode integers in decimal and booleans as `true` or `false`. A string that cannot be sent as plain ASCII, including one with leading or trailing whitespace or one that matches the encoding marker, uses `=?base64?BASE64?=` encoding. The same rule applies to `Mcp-Name` values, including `ui://` resource URIs; the server decodes encoded headers before comparing them with the body. The annotation can appear within nested object `properties`, but not inside an array, schema composition, or `$ref`. TypeScript SDK users should use `z.int()` for an annotated integer; `z.number()` describes a JSON Schema `number` and is invalid here.
+
+## Check the header against the body
+
+The server checks the version, method, name, and annotated argument headers against the JSON-RPC body. A missing required header or a mismatch returns HTTP 400 with JSON-RPC error code `-32020` (`HeaderMismatch`). Gateways that rely on mirrored headers should first verify that the request uses the modern protocol version; a legacy client does not provide the same header guarantees.
+
+See the [MCP Streamable HTTP transport specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http) for the complete wire rules and [MCP Apps capability detection](/mcp-apps/mcp/2026-07-28#mcp-apps-capability-detection) for the separate View metadata.

@@ -61,6 +61,9 @@ Use `z.int()` for an integer parameter. SDK 2.4 clients exclude tools that annot
 `number` parameter, and the server rejects calls whose parameter headers do not match the body.
 This restriction applies to the modern HTTP protocol, not sunpeak's legacy HTTP wrappers.
 
+See [MCP HTTP request headers for MCP Apps](/mcp-apps/mcp/http-request-headers) for the
+header mapping, `x-mcp-header` example, encoding rules, and server validation checklist.
+
 ### Lists and resource reads are cacheable
 
 Completed results for `server/discover`, list methods, and `resources/read` include `ttlMs` and `cacheScope`. Use `cacheScope: "public"` only when every authorization context receives the same result. User-specific tool lists, resource lists, and UI resource HTML need `"private"` caching.
