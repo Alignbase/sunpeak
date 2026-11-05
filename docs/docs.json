@@ -464,6 +464,7 @@
             "pages": [
               "mcp-apps/mcp/overview",
               "mcp-apps/mcp/2026-07-28",
+              "mcp-apps/mcp/server-discover",
               "mcp-apps/mcp/http-request-headers",
               "mcp-apps/mcp/authorization",
               "mcp-apps/mcp/resources",

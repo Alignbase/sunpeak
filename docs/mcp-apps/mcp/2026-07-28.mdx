@@ -44,6 +44,9 @@ Core MCP `2026-07-28` removes `initialize`, `notifications/initialized`, and the
 
 Servers must implement `server/discover`, which returns supported protocol versions, capabilities, identity, and optional instructions. A client may call it before other methods, but it can instead send its preferred version and retry after an `UnsupportedProtocolVersionError`.
 
+Use the [`server/discover` reference](/mcp-apps/mcp/server-discover) for a copyable HTTP request,
+response fields, and a checklist for MCP App capability discovery.
+
 This change applies only to the Host ↔ server connection. An MCP App View still calls `app.connect()`, which sends `ui/initialize` and `ui/notifications/initialized` over `postMessage`.
 
 ### HTTP requests are routable without reading the body

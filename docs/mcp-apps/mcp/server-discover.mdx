@@ -1,0 +1,108 @@
+---
+title: 'MCP server/discover for MCP Apps'
+sidebarTitle: 'server/discover'
+description: 'Call MCP server/discover on a 2026-07-28 server, inspect supportedVersions and capabilities, and check MCP Apps UI support before listing tools.'
+keywords:
+  [
+    'MCP server/discover',
+    'MCP Apps server discovery',
+    'MCP supportedVersions',
+    'MCP clientCapabilities',
+    'MCP 2026-07-28 discovery',
+    'io.modelcontextprotocol/ui',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+Core MCP `2026-07-28` requires servers to implement `server/discover`. A client can call it to learn which protocol versions and capabilities a server supports before calling tools. The call is optional for clients, which can instead send a request with their preferred version and handle `UnsupportedProtocolVersionError`.
+
+This is the Host-to-server protocol. The MCP App View still connects to its Host with the separate `ui/initialize` handshake.
+
+<Note>
+  sunpeak's public HTTP server wrappers currently speak core MCP `2025-11-25` through the SDK's
+  legacy transport. They do not implement this modern wire path. Use the
+  [legacy/modern compatibility guide](/mcp-apps/mcp/2026-07-28) before testing a sunpeak server
+  with this request.
+</Note>
+
+## Send a discovery request
+
+This request advertises that the client can display MCP App HTML. Replace the URL with a server that implements core MCP `2026-07-28`:
+
+```bash
+curl https://example.com/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: server/discover' \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "server/discover",
+    "params": {
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": {
+          "name": "example-host",
+          "version": "1.0.0"
+        },
+        "io.modelcontextprotocol/clientCapabilities": {
+          "extensions": {
+            "io.modelcontextprotocol/ui": {
+              "mimeTypes": ["text/html;profile=mcp-app"]
+            }
+          }
+        }
+      }
+    }
+  }'
+```
+
+The `MCP-Protocol-Version` header must match the body's protocol version. `Mcp-Method` must match `method`. `clientCapabilities` is required on each modern request, while `clientInfo` is recommended. For the header rules on other methods, see [MCP HTTP request headers](/mcp-apps/mcp/http-request-headers).
+
+## Read the response
+
+A modern server response has this shape. The capabilities and instructions depend on the server:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "resultType": "complete",
+    "supportedVersions": ["2026-07-28"],
+    "capabilities": {
+      "tools": {},
+      "resources": {},
+      "extensions": {
+        "io.modelcontextprotocol/ui": {}
+      }
+    },
+    "_meta": {
+      "io.modelcontextprotocol/serverInfo": {
+        "name": "example-server",
+        "version": "1.0.0"
+      }
+    }
+  }
+}
+```
+
+| Field | What to check |
+| --- | --- |
+| `supportedVersions` | Choose a version both client and server support for later requests. |
+| `capabilities.tools` | The server advertises tools; call `tools/list` to inspect them. |
+| `capabilities.resources` | The server advertises resources; a UI resource may still be absent from `resources/list`. |
+| `capabilities.extensions["io.modelcontextprotocol/ui"]` | The server advertises MCP Apps support. Tools and resources alone do not establish UI support. |
+| `_meta["io.modelcontextprotocol/serverInfo"]` | Optional, self-reported server identity for display and debugging. Do not use it for authorization. |
+| `instructions` | Optional guidance for the client or model. |
+| `ttlMs`, `cacheScope` | Optional cache hints. Use private caching when discovery varies by authorization context. |
+
+Discovery confirms that the server advertises the MCP Apps extension, but it does not tell you which tool opens a View. Next, call `tools/list` with the same MCP Apps client capability and inspect the UI tool's `_meta.ui.resourceUri`. Then call `resources/read` for that exact `ui://` URI and check for `text/html;profile=mcp-app`. See the [tool and resource contract](/mcp-apps/server/tool-resource-contract) for those fields.
+
+## Handle incompatible versions
+
+If the server returns `UnsupportedProtocolVersionError` (JSON-RPC code `-32022`), read `error.data.supported` and retry with a mutually supported version. A recognized modern error means the endpoint speaks the modern protocol, so do not treat that response as a signal to start a legacy handshake. A legacy-only endpoint follows the older `initialize` lifecycle instead.
+
+For the normative request and response fields, see the [MCP server discovery specification](https://modelcontextprotocol.io/specification/2026-07-28/server/discover) and [version negotiation rules](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning).

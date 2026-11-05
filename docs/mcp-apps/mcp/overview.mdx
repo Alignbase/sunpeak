@@ -67,9 +67,9 @@ sequenceDiagram
 
 ## Core MCP 2026-07-28 Lifecycle
 
-The current core revision has no `initialize` handshake or `Mcp-Session-Id`. Each request includes its protocol version, client identity, and client capabilities. Servers implement `server/discover` for optional up-front capability discovery, and clients can retry with a supported version when needed.
+The current core revision has no `initialize` handshake or `Mcp-Session-Id`. Each request includes its protocol version and client capabilities; clients should also include their identity. Servers implement `server/discover` for optional up-front capability discovery, and clients can retry with a supported version when needed.
 
-This change does not remove the MCP Apps View's separate `ui/initialize` handshake. Read [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28) before updating a server or SDK.
+This change does not remove the MCP Apps View's separate `ui/initialize` handshake. Read [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28) before updating a server or SDK, or use the [`server/discover` reference](/mcp-apps/mcp/server-discover) to check a modern endpoint.
 
 ## What Can Servers Expose?
 
