@@ -25,7 +25,7 @@ keywords:
 
 An MCP App server is a normal MCP server with three additions:
 
-1. It detects whether the connecting host supports MCP Apps.
+1. It checks whether the client supports MCP Apps.
 2. It registers `ui://` HTML resources with the `text/html;profile=mcp-app` MIME type.
 3. It links tools to those resources with `_meta.ui.resourceUri`.
 
@@ -37,7 +37,7 @@ If you already have a standard MCP tool and want to add a View without changing 
 
 Before you test in a host, confirm these items:
 
-- The server checks `getUiCapability(clientCapabilities)` before adding UI metadata.
+- The server checks client capabilities before adding UI metadata. Use the connection's capabilities on legacy MCP or [each request's capabilities](/mcp-apps/server/capability-detection#modern-per-request-capabilities) on MCP `2026-07-28`.
 - Every UI resource URI starts with `ui://`.
 - Every UI resource returns `mimeType: RESOURCE_MIME_TYPE`.
 - Each UI tool points at an existing resource with `_meta.ui.resourceUri`.
@@ -48,6 +48,8 @@ Before you test in a host, confirm these items:
 - UI-only actions use `visibility: ["app"]` so they do not appear in the model tool list.
 
 ## Complete Example
+
+This standalone `McpServer` example uses the legacy MCP `2025-11-25` `initialize` handshake and its `oninitialized` callback. MCP `2026-07-28` servers must check [per-request capabilities](/mcp-apps/server/capability-detection#modern-per-request-capabilities) instead. The sunpeak framework manages its own `oninitialized` callback, so use its tool and resource conventions rather than assigning that callback yourself.
 
 ```ts
 import { McpServer } from '@modelcontextprotocol/server';
@@ -314,7 +316,7 @@ The View can call the tool through [`callServerTool()`](/mcp-apps/app/requests/c
 
 <CardGroup cols={2}>
   <Card title="Capability Detection" icon="page" href="/mcp-apps/server/capability-detection">
-    Check whether a host supports MCP Apps before registering UI tools.
+    Check client capabilities before returning MCP Apps UI metadata.
   </Card>
   <Card title="Add a UI to an MCP Tool" icon="page" href="/mcp-apps/server/add-ui-to-tool">
     Convert an existing tool into a UI-rendering MCP App.

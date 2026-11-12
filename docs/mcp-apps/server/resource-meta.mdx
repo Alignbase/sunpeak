@@ -214,7 +214,7 @@ _meta: {
 }
 ```
 
-Without sunpeak, detect the host in your `resources/read` handler and return the appropriate string. The MCP `initialize` handshake includes `clientInfo.name`, which identifies the connecting host.
+Without sunpeak, use the available client identity in your `resources/read` handler to return the appropriate string. Legacy MCP `initialize` includes `clientInfo.name`; on MCP `2026-07-28`, clients should send identity in each request's `_meta["io.modelcontextprotocol/clientInfo"]`. Because modern identity is optional, provide a default domain when it is absent. See [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28).
 
 If omitted, the host uses its default sandbox origin.
 

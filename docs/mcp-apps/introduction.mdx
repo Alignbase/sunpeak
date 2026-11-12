@@ -70,7 +70,7 @@ flowchart LR
 
 ## What happens if a host doesn't support MCP Apps?
 
-MCP Apps is designed for graceful degradation. Hosts advertise their UI support when connecting to servers; servers check these capabilities before registering UI-enabled tools. If a host doesn't support MCP Apps, tools still work — they just return text instead of UI.
+MCP Apps supports text fallbacks. Clients advertise UI support in capabilities during legacy MCP `initialize` or on each MCP `2026-07-28` request. A server can use those capabilities to tailor UI metadata, and every tool should return useful text in `content`. A host without MCP Apps support can use that text result without rendering the View.
 
 See [Capability Detection](/mcp-apps/server/capability-detection) for implementation details.
 

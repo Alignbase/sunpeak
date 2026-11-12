@@ -1,8 +1,8 @@
 ---
-title: "MCP Apps Capability Detection"
+title: "MCP Apps Capability Negotiation and Detection"
 sidebarTitle: "Capability Detection"
-description: "Detect whether an MCP host supports Apps UI before registering tools. Use getUiCapability and EXTENSION_ID to check for MCP Apps support in ChatGPT, Claude, and other hosts."
-keywords: ["MCP Apps", "ChatGPT Apps", "Claude Apps", "capability detection", "feature detection", "host support"]
+description: "Check io.modelcontextprotocol/ui and text/html;profile=mcp-app in client capabilities for legacy initialize and modern per-request MCP, then offer UI or text-only tools."
+keywords: ["MCP Apps capability negotiation", "io.modelcontextprotocol/ui", "MCP clientCapabilities", "MCP Apps getUiCapability", "text/html;profile=mcp-app", "MCP Apps fallback"]
 ---
 
 <Badge color="green">MCP Apps SDK</Badge>
@@ -13,7 +13,9 @@ import { getUiCapability, EXTENSION_ID, RESOURCE_MIME_TYPE } from "@modelcontext
 
 ## Overview
 
-Not all MCP hosts support Apps yet. Servers should check whether the connecting host supports MCP Apps before registering UI-enabled tools — if it doesn't, register text-only fallback tools instead. This keeps your server compatible with every host while delivering rich UIs where available.
+Not all MCP hosts support Apps. Check the client's `io.modelcontextprotocol/ui` extension and its `mimeTypes` before offering UI-enabled tools. Keep the tool's text result useful when the host cannot render a View.
+
+Core MCP `2025-11-25` sends client capabilities once in `initialize`. Core MCP `2026-07-28` sends them in every request's `_meta`. sunpeak's public HTTP server wrappers currently use the legacy transport. The `oninitialized` example below is for a standalone `McpServer`; sunpeak's wrapper already uses that callback internally. A modern server must read capabilities from each request instead of relying on a connection-level callback.
 
 ## getUiCapability
 
@@ -30,7 +32,8 @@ function getUiCapability(
 ### Returns
 
 <ResponseField name="return" type="McpUiClientCapabilities | undefined">
-  The capability object if the host supports MCP Apps, or `undefined` if not.
+  The extension settings if the client advertises the key, or `undefined` if it does not. Check
+  `mimeTypes` as well before serving HTML.
 
   <ResponseField name="mimeTypes" type="string[]">
     Supported MIME types. Must include `"text/html;profile=mcp-app"` for MCP Apps support.
@@ -39,7 +42,7 @@ function getUiCapability(
 
 ### Usage
 
-Use `server.server.oninitialized` to check capabilities after the MCP handshake:
+For a standalone legacy `2025-11-25` server instance, use `server.server.oninitialized` to check capabilities after the MCP handshake:
 
 ```ts
 import {
@@ -74,6 +77,44 @@ server.server.oninitialized = () => {
 };
 ```
 
+The client capability in the legacy `initialize` request has this shape:
+
+```json
+{
+  "extensions": {
+    "io.modelcontextprotocol/ui": {
+      "mimeTypes": ["text/html;profile=mcp-app"]
+    }
+  }
+}
+```
+
+## Modern per-request capabilities
+
+Core MCP `2026-07-28` has no `initialize` request or `oninitialized` callback. Each request carries client capabilities at `params._meta["io.modelcontextprotocol/clientCapabilities"]`. A modern server checks the UI extension for the current request before returning UI tool metadata or HTML:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list",
+  "params": {
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {
+        "extensions": {
+          "io.modelcontextprotocol/ui": {
+            "mimeTypes": ["text/html;profile=mcp-app"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Use the same MIME check on that request's capability object. Do not infer support from a prior request, because modern requests may reach different server instances. For a complete HTTP request and the server's extension advertisement, see [`server/discover` for MCP Apps](/mcp-apps/mcp/server-discover).
+
 ## EXTENSION_ID
 
 The extension identifier used in the MCP `extensions` field for capability negotiation.
@@ -82,8 +123,11 @@ The extension identifier used in the MCP `extensions` field for capability negot
 const EXTENSION_ID = "io.modelcontextprotocol/ui";
 ```
 
-Hosts advertise MCP Apps support by including this key in their `extensions` capabilities during the [MCP initialization](/mcp-apps/mcp/overview#connection-lifecycle) [handshake](/mcp-apps/lifecycle#2-initialization). `getUiCapability` reads from this key internally.
+Hosts advertise MCP Apps support by including this key in client capabilities. It appears in the [legacy `initialize` handshake](/mcp-apps/mcp/overview#sunpeak-connection-lifecycle) or the modern request metadata described above. `getUiCapability` reads this key from a client capability object.
 
 <Tip>
-In the [sunpeak framework](/quickstart), capability detection is handled in the [Server Entry](/app-framework/tools/server-entry).
+  The [sunpeak framework](/quickstart) registers its discovered tools and resources through project
+  conventions. Its HTTP wrappers currently use the legacy transport and do not branch tool
+  registration on the client's UI capability. Return useful text in each tool's `content` so
+  clients without a View can still use it.
 </Tip>

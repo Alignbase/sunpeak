@@ -96,7 +96,7 @@ The core MCP `initialize` request negotiates the core protocol version. An MCP A
 
 Servers should check this extension before returning MCP Apps metadata. [`getUiCapability()`](/mcp-apps/server/capability-detection) reads the extension without tying your server to a specific Host name.
 
-Core MCP `2026-07-28` removes this handshake and carries the version, identity, and capabilities on each request. sunpeak uses the SDK 2.0 package APIs, while its framework HTTP wrappers still expose the legacy compatibility transport. See [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28) for the compatibility boundary and migration checklist.
+Core MCP `2026-07-28` removes this handshake and carries the version and capabilities on each request. Clients should also send their identity. sunpeak uses the SDK 2.0 package APIs, while its framework HTTP wrappers still expose the legacy compatibility transport. See [MCP 2026-07-28 for MCP Apps](/mcp-apps/mcp/2026-07-28) for the compatibility boundary and migration checklist.
 
 ### 2. View ↔ Host
 
@@ -140,7 +140,7 @@ Use feature checks instead of Host-name checks. A Host can add capabilities with
 ## Compatibility Rules
 
 - Use `App.connect()` for Views and `AppBridge` for Hosts so the SDK handles MCP Apps version negotiation.
-- Use [`getUiCapability()`](/mcp-apps/server/capability-detection) before registering UI-enabled server tools.
+- On legacy MCP, use [`getUiCapability()`](/mcp-apps/server/capability-detection) with the `initialize` capabilities before registering UI-enabled server tools. On modern MCP, check each request's client capabilities before returning UI metadata.
 - Keep meaningful text in tool result `content` so clients without MCP Apps support still work.
 - Treat Host capabilities as feature gates for server tools, resources, messages, sampling, downloads, and links.
 - Register one-shot View handlers, including `ontoolinput` and `ontoolresult`, before `connect()`.

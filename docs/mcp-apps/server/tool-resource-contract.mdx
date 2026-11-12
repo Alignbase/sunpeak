@@ -49,9 +49,9 @@ Use UI-launching tools for the actions a user can ask the model to perform, such
 | Tool result         | `tools/call` result                       | Returns readable `content`, model-visible `structuredContent`, and optional component-only `_meta`.      |
 
 <Note>
-  MCP Apps are optional. Servers should check the host's MCP Apps capability before registering UI
-  metadata, then fall back to text-only MCP tools when the host does not support
-  `text/html;profile=mcp-app`.
+  MCP Apps are optional. Servers can check the client's MCP Apps capability before returning UI
+  metadata: during the legacy `initialize` handshake or on [each MCP `2026-07-28` request](/mcp-apps/server/capability-detection#modern-per-request-capabilities).
+  Keep useful text in tool result `content` for clients that do not render a View.
 </Note>
 
 ## Minimal Contract

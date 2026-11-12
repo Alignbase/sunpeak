@@ -25,7 +25,7 @@ For the complete server example, see [Build an MCP App Server](/mcp-apps/server/
 
 ## 1. Negotiate MCP Apps Support
 
-MCP Apps are a progressive enhancement. Register UI metadata only when the connecting host advertises support for the MCP Apps resource MIME type.
+MCP Apps are a progressive enhancement. Check whether the client advertises support for the MCP Apps resource MIME type before returning UI metadata. The example below uses the legacy MCP `2025-11-25` connection callback. For MCP `2026-07-28`, read capabilities from [each request's `_meta`](/mcp-apps/server/capability-detection#modern-per-request-capabilities).
 
 ```ts
 import { getUiCapability, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';

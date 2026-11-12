@@ -28,15 +28,15 @@ A regular [tool](/mcp-apps/mcp/tools) returns text and structured data that the 
 </Accordion>
 
 <Accordion title="How do I add a UI to an existing MCP tool?">
-Keep the tool name, input schema, annotations, and readable `content`. Add a `ui://` HTML resource, return model-safe `structuredContent` for the View, declare an `outputSchema`, and link the tool with `_meta.ui.resourceUri`. Keep a text-only registration branch for hosts that do not advertise MCP Apps support. See [Add a UI to an MCP Tool](/mcp-apps/server/add-ui-to-tool).
+Keep the tool name, input schema, annotations, and readable `content`. Add a `ui://` HTML resource, return model-safe `structuredContent` for the View, declare an `outputSchema`, and link the tool with `_meta.ui.resourceUri`. If your server varies tool registration by client capability, keep a text-only branch. See [Add a UI to an MCP Tool](/mcp-apps/server/add-ui-to-tool).
 </Accordion>
 
 <Accordion title="Which AI hosts support MCP Apps?">
-ChatGPT and Claude render MCP Apps today. The protocol is host-agnostic, so other hosts can adopt it without changes to your server. Hosts advertise their UI support when they connect, and your server checks those capabilities before registering UI-enabled tools. See [capability detection](/mcp-apps/server/capability-detection).
+ChatGPT and Claude render MCP Apps today. The protocol is host-agnostic, so other hosts can adopt it without changes to your server. Hosts advertise UI support in client capabilities: once during legacy `initialize`, or on each modern MCP request. See [capability detection](/mcp-apps/server/capability-detection).
 </Accordion>
 
 <Accordion title="What happens if a host doesn't support MCP Apps?">
-Tools still work. MCP Apps is built for graceful degradation: a host that can't render UI receives the tool's text and structured content as normal, and never sees the UI resource. Because your server checks host capabilities at connection time, you can register the same tools everywhere and let UI-capable hosts render the app. See [capability detection](/mcp-apps/server/capability-detection).
+Tools still work when they return meaningful text in `content`. A host that cannot render a View can use that result as a normal MCP tool response. The UI resource may remain registered, but the host does not render it. Servers that tailor UI metadata by client capability should check the current connection on legacy MCP or the current request on modern MCP. See [capability detection](/mcp-apps/server/capability-detection).
 </Accordion>
 
 <Accordion title="How does a server deliver a UI to the host?">

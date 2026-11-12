@@ -196,7 +196,7 @@ The `resourceUri` string must match the registered resource URI exactly. Hosts u
 
 ## 5. Keep a Text Fallback
 
-MCP Apps are optional. Check host capabilities before registering UI metadata, then register a normal text tool when the host does not support MCP Apps.
+MCP Apps are optional. The example below checks capabilities for a standalone server using the legacy MCP `2025-11-25` `initialize` handshake, then registers a text tool when the client does not support MCP Apps. For MCP `2026-07-28`, check [each request's capabilities](/mcp-apps/server/capability-detection#modern-per-request-capabilities) before returning UI metadata. The sunpeak framework manages its own `oninitialized` callback.
 
 ```ts
 import { getUiCapability, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
@@ -215,7 +215,7 @@ server.server.oninitialized = () => {
 };
 ```
 
-Use the same tool name in both branches. Only one branch is registered for the connection, so callers do not need separate tool names.
+Use the same tool name in both branches. In this legacy example, only one branch is registered for the connection, so callers do not need separate tool names.
 
 ## 6. Add App-only Helper Tools
 
