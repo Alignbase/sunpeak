@@ -127,6 +127,17 @@
     "dist",
     "bin",
     "template",
+    "!template/**/node_modules",
+    "!template/dist",
+    "!template/test-results",
+    "!template/playwright-report",
+    "!template/coverage",
+    "!template/tests/live/.auth",
+    "!template/**/.env",
+    "!template/**/.env.*",
+    "!template/**/.eval-vitest.config.ts",
+    "!template/**/*.log",
+    "!template/**/*.tsbuildinfo",
     "README.md"
   ],
   "sideEffects": [
