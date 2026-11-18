@@ -13,7 +13,7 @@ import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
 
 ## Overview
 
-The `App` class provides a framework-agnostic way to build interactive MCP Apps that run inside host applications. In SDK 2.0, which current sunpeak releases use, it extends the split client SDK's `Protocol` class and handles the connection lifecycle, [initialization handshake](/mcp-apps/lifecycle#2-initialization), and bidirectional communication with the host. The class provides DOM-style `addEventListener()` and `removeEventListener()` methods alongside the traditional `on*` setter properties.
+The `App` class provides a framework-agnostic way to build interactive MCP Apps that run inside host applications. In SDK 2.x (current sunpeak releases use 2.1), it extends the split client SDK's `Protocol` class and handles the connection lifecycle, [initialization handshake](/mcp-apps/lifecycle#2-initialization), and bidirectional communication with the host. The class provides DOM-style `addEventListener()` and `removeEventListener()` methods alongside the traditional `on*` setter properties.
 
 <Note>
   MCP Apps SDK 2.0 removed the `ProtocolWithEvents` type. Import `App` or `AppBridge` instead; both
@@ -36,7 +36,8 @@ new App(appInfo, capabilities?, options?)
 
 <ResponseField name="options" type="AppOptions" default="{ autoResize: true }">
   <ResponseField name="autoResize" type="boolean" default="true">
-    Automatically report size changes to the host using `ResizeObserver`.
+    Automatically report size changes to the host using `ResizeObserver`. The default applies only
+    when you omit the options object, so include `autoResize: true` when you pass other options.
   </ResponseField>
   <ResponseField name="strict" type="boolean" default="false">
     Throw when host-bound methods run before the initialization handshake completes. The default
@@ -45,6 +46,11 @@ new App(appInfo, capabilities?, options?)
   <ResponseField name="allowUnsafeEval" type="boolean" default="false">
     Allow schema parsing paths that require CSP `unsafe-eval`. Keep this disabled for normal MCP
     App Views.
+  </ResponseField>
+  <ResponseField name="webMcpBridge" type="boolean" default="true">
+    Bridge app tools and [WebMCP](https://webmachinelearning.github.io/webmcp/) in both directions.
+    See [WebMCP interoperability](/mcp-apps/app/app-tools#webmcp-interoperability). Pass `false`
+    to turn the bridge off.
   </ResponseField>
 </ResponseField>
 

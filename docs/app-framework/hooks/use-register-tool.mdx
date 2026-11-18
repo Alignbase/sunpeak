@@ -12,7 +12,7 @@ Returns a function to register tools that the host (or LLM) can call. Uses Stand
 
 For simpler static tool registration, see [`useAppTools`](/app-framework/hooks/use-app-tools). `useRegisterTool` provides lower-level control with dynamic registration and Standard Schema support.
 
-The underlying MCP Apps registry sends `notifications/tools/list_changed` automatically when you register, update, enable, disable, or remove a tool and the View declared `tools.listChanged`.
+The underlying MCP Apps registry sends `notifications/tools/list_changed` automatically when you register, update, enable, disable, or remove a tool and the View declared `tools.listChanged`. When the browser provides `document.modelContext`, the SDK also mirrors registered tools into [WebMCP](/mcp-apps/app/app-tools#webmcp-interoperability).
 
 ## Import
 

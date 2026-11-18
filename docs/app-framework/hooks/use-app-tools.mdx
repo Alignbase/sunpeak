@@ -107,6 +107,8 @@ function EditorResource() {
 3. When the host invokes a tool, your `onCallTool` handler is called with the tool name and arguments.
 4. Your handler returns a `CallToolResult` which the host uses in its next turn.
 
+`useAppTools` sets `onlisttools` and `oncalltool` directly, which replaces the SDK handlers. Its tools are not mirrored into [WebMCP](/mcp-apps/app/app-tools#webmcp-interoperability), and tools the page registered on WebMCP drop out of `tools/list`. Use [`useRegisterTool`](/app-framework/hooks/use-register-tool) if you want the bridge.
+
 ## See Also
 
 <Card horizontal title="useCallServerTool" icon="wrench" href="/app-framework/hooks/use-call-server-tool">

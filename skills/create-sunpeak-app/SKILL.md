@@ -281,7 +281,7 @@ All hooks are imported from `sunpeak`:
 | `useApp()` | `App \| null` | Raw [MCP App](https://sunpeak.ai/docs/mcp-apps/mcp/overview) instance for direct SDK calls |
 | `useCallServerTool()` | `(params) => Promise<result>` | Returns a function to call a server-side tool by name |
 | `useCreateSamplingMessage()` | `(params) => Promise<result>` | Request LLM completions from the host via sampling/createMessage |
-| `useRegisterTool()` | `(name, config, cb) => handle` | Register app-side tools the host can call; returns handle with enable/disable/remove |
+| `useRegisterTool()` | `(name, config, cb) => handle` | Register app-side tools the host can call; returns handle with enable/disable/remove. ext-apps 2.1+ also mirrors them into WebMCP (`document.modelContext`) when the browser provides it, and a WebMCP caller runs the handler without the host, so keep handlers safe to call that way. Any page script that registers on `document.modelContext` is also exposed to the host as an app tool |
 | `useSendMessage()` | `(params) => Promise<void>` | Returns a function to send a message to the conversation |
 | `useOpenLink()` | `(params) => Promise<void>` | Returns a function to open a URL through the host |
 | `useRequestDisplayMode()` | `{ requestDisplayMode, availableModes }` | Request `'inline'`, `'pip'`, or `'fullscreen'`; check `availableModes` first |

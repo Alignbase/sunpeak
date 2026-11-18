@@ -28,7 +28,7 @@ This distinction matters when an app works as a normal MCP tool but its UI does 
 | -------------------- | ----------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------- |
 | Core MCP protocol    | Latest: `2026-07-28`; sunpeak HTTP wrappers: `2025-11-25` | Host ↔ MCP server requests                         | Tools, resources, transport, and core MCP capabilities              |
 | MCP Apps protocol    | `2026-01-26`                                          | View ↔ Host `ui/initialize`                           | View lifecycle, host context, app capabilities, and `ui/*` messages |
-| MCP Apps SDK package | `2.0.4`                                               | `package.json`                                        | The implementation, peer dependencies, and TypeScript APIs          |
+| MCP Apps SDK package | `2.1.0`                                               | `package.json`                                        | The implementation, peer dependencies, and TypeScript APIs          |
 | Your app version     | `1.4.0`                                               | `appInfo.version`                                     | Your View's identity, not protocol compatibility                    |
 
 The date-based protocol versions are independent. A Host can support a given core MCP version without supporting MCP Apps, and an MCP Apps-capable Host may expose only some optional View APIs.
@@ -44,7 +44,7 @@ The date-based protocol versions are independent. A Host can support a given cor
 
 A 2.x View can run in a 1.x Host, and a 2.x Host can render a 1.x View. This wire compatibility does not make their TypeScript classes interchangeable, and it does not make the core MCP 1.x and 2.x server APIs interchangeable.
 
-Current sunpeak releases use ext-apps 2.0 with the split client, core, server, and Node SDK packages. sunpeak's existing HTTP server wrappers continue to use the SDK's handshake-based compatibility transport, so adopting the 2.0 TypeScript APIs does not by itself switch those endpoints to the core `2026-07-28` wire protocol. Standalone projects can use the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) to move to the split packages.
+Current sunpeak releases use ext-apps 2.1 with the split client, core, server, and Node SDK packages. sunpeak's existing HTTP server wrappers continue to use the SDK's handshake-based compatibility transport, so adopting the 2.0 TypeScript APIs does not by itself switch those endpoints to the core `2026-07-28` wire protocol. Standalone projects can use the [MCP Apps SDK 2.0 Migration Guide](/mcp-apps/sdk-v2-migration) to move to the split packages.
 
 ## Two Independent Protocol Layers
 

@@ -328,6 +328,11 @@ This is the upstream SDK that sunpeak wraps. Upgrades often introduce new `App` 
 8. **Keep split SDK packages aligned** — ext-apps 2.x requires the MCP 2.x client and Zod 4.2+. Server helpers also require `@modelcontextprotocol/server`; Node HTTP transport uses `@modelcontextprotocol/node`; runtime protocol schemas come from `@modelcontextprotocol/core`. Do not reintroduce the monolithic `@modelcontextprotocol/sdk`.
 9. **Migrate breaking surfaces** — Wrap raw Zod shapes with `z.object()`, move request fields under `extra.mcpReq`, read HTTP auth from `extra.http?.authInfo`, and remove uses of the deleted `ProtocolWithEvents` class.
 
+### MCP Apps SDK 2.1 compatibility
+
+- `App` bridges `registerTool()` tools and WebMCP (`document.modelContext`) in both directions by default, and declares the `tools` capability before the handshake when page WebMCP tools exist. `AppProvider` forwards its `options` prop (`AppOptions`, including `webMcpBridge: false`) to the `App` constructor and keeps `autoResize: true` unless set, because the SDK drops that default when any options object is passed. The generated dev/build resource entry does not pass `options`, and a nested `AppProvider` reuses the module-level `App`, so framework apps keep the bridge on and cannot opt out today.
+- The draft spec no longer requires double sandboxed iframes. Keep the inspector's double-iframe layout because ChatGPT and Claude still use a separate sandbox origin.
+
 ### MCP TypeScript SDK 2.4 compatibility
 
 - Keep output data object-shaped for legacy clients. Root `$ref` schemas that resolve to objects now return `structuredContent` directly, without a `result` wrapper. Use valid URI syntax for schema IDs and references.

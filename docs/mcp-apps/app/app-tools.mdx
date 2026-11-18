@@ -185,6 +185,29 @@ editor.on("dirty", async () => {
 
 List-changed notifications work only when the View declared `tools: { listChanged: true }` and the Host supports app-side tools. The Host then re-runs `tools/list` and updates the model's available tools for the next turn.
 
+## WebMCP interoperability
+
+Starting with ext-apps 2.1, `App` bridges its tool registry and [WebMCP](https://webmachinelearning.github.io/webmcp/) in both directions. The bridge adds no new message types and needs no Host changes.
+
+- Tools you add with `app.registerTool()` are also registered on `document.modelContext` (or `navigator.modelContext`) when the browser provides one. The `tools/list` and `tools/call` path works the same either way. Tools served from a custom `onlisttools` handler are not mirrored.
+- Tools the page registers on `document.modelContext` show up in the View's `tools/list` result and run through `tools/call`, so a View written against WebMCP also works in MCP Apps hosts. If page WebMCP tools exist when `connect()` runs, the SDK declares the `tools` capability for you. When `tools.listChanged` is declared, by the View or by that automatic declaration, the SDK also relays WebMCP `toolchange` events as `notifications/tools/list_changed`.
+
+A tool from `registerTool()` wins when both sides use the same name, and the SDK never echoes its own mirrored tools back into `tools/list`. A View that assigns `onlisttools` or `oncalltool` itself replaces the SDK handlers, so page WebMCP tools are not added to its list.
+
+Mirrored tools carry only their name, title, description, input schema, and `readOnlyHint`. Their `_meta`, including `ui.visibility`, is dropped, and a WebMCP caller in the browser runs the handler directly without going through the Host. Write handlers that are safe to call that way, or turn the bridge off. In the other direction, any script in the View that registers a tool on `document.modelContext`, including third-party libraries, exposes that tool to the Host and its model. Review the scripts your View loads, or turn the bridge off.
+
+Turn the bridge off with `webMcpBridge: false`. Passing an options object replaces the SDK defaults, so keep `autoResize: true` in it:
+
+```ts
+const app = new App(
+  { name: "MyApp", version: "1.0.0" },
+  { tools: { listChanged: true } },
+  { autoResize: true, webMcpBridge: false },
+);
+```
+
+In React, pass `webMcpBridge: false` to [`useApp`](/mcp-apps/react/use-app). The resource entry that `sunpeak dev` and `sunpeak build` generate mounts the sunpeak [`AppProvider`](/app-framework/components/app-provider) without options, so framework resources keep the bridge on and can't turn it off today. Nesting another `AppProvider` inside a resource has no effect, because the first one already owns the `App`. The `options` prop only matters in a custom entry that mounts the first `AppProvider` itself.
+
 ## Tool visibility — model, app, or both
 
 The `_meta.ui.visibility` array on a tool controls who can call it: `"model"`, `"app"`, or both. App-side tools that are surfaced to the model should remain `["model", "app"]` (the default). Set `["app"]` for tools that are pure UI plumbing (refresh buttons, pagination) and shouldn't clutter the model's tool list. See [Tool `_meta`](/mcp-apps/server/tool-meta#visibility) for the full discussion.

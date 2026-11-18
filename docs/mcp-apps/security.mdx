@@ -48,7 +48,9 @@ The iframe prevents direct DOM access to the Host. It does not make View request
 
 ## Host Isolation Requirements
 
-For web hosts, the MCP Apps specification requires an intermediate sandbox proxy on a different origin from the Host. The sandbox uses `allow-scripts` and `allow-same-origin`, loads the View with a restrictive CSP, and forwards protocol messages between the Host and View.
+For web hosts, the `2026-01-26` MCP Apps specification requires an intermediate sandbox proxy on a different origin from the Host. The sandbox uses `allow-scripts` and `allow-same-origin`, loads the View with a restrictive CSP, and forwards protocol messages between the Host and View.
+
+The draft specification that shipped with ext-apps 2.1 relaxes this rule. A Host may use any framing design that meets the draft's general security criteria, and the double sandboxed iframe becomes one non-normative option. ChatGPT and Claude still load Views from a separate sandbox origin, so the sunpeak inspector keeps its double-iframe layout.
 
 The Host must not send requests or notifications to the View until the View finishes the `ui/initialize` handshake and sends `ui/notifications/initialized`.
 

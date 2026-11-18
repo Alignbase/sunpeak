@@ -14,12 +14,18 @@
  * app first mounts (common on first load in ChatGPT and Claude).
  */
 import { createContext, useState, useEffect, type ReactNode } from 'react';
-import { App, PostMessageTransport } from '@modelcontextprotocol/ext-apps';
+import { App, PostMessageTransport, type AppOptions } from '@modelcontextprotocol/ext-apps';
 import { initToolDataStore } from './tool-data-store';
 
 export interface AppProviderProps {
   appInfo: { name: string; version: string };
   capabilities?: Record<string, unknown>;
+  /**
+   * Options forwarded to the SDK `App` constructor, such as `autoResize`,
+   * `strict`, or `webMcpBridge`. `autoResize` stays `true` unless you set it.
+   * Read once when the first connection starts.
+   */
+  options?: AppOptions;
   onAppCreated?: (app: App) => void;
   children: ReactNode;
 }
@@ -76,7 +82,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 async function connectWithRetry(
   appInfo: { name: string; version: string },
   capabilities: Record<string, unknown>,
-  onAppCreated?: (app: App) => void
+  onAppCreated?: (app: App) => void,
+  options?: AppOptions
 ): Promise<App> {
   let lastError: Error | null = null;
 
@@ -89,7 +96,12 @@ async function connectWithRetry(
     let transport: PostMessageTransport | null = null;
     try {
       transport = new PostMessageTransport(window.parent, window.parent);
-      const newApp = new App(appInfo, capabilities);
+      const newApp = new App(appInfo, capabilities, {
+        // The SDK applies its autoResize default only when the whole options
+        // object is omitted, so keep it on for partial options.
+        ...options,
+        autoResize: options?.autoResize ?? true,
+      });
       // Pre-register useToolData's notification handlers BEFORE connect()
       // runs the ui/initialize handshake. Hosts that fire
       // `ui/notifications/tool-result` immediately after the initialize
@@ -125,7 +137,13 @@ async function connectWithRetry(
   throw lastError ?? new Error('Failed to connect');
 }
 
-export function AppProvider({ appInfo, capabilities, onAppCreated, children }: AppProviderProps) {
+export function AppProvider({
+  appInfo,
+  capabilities,
+  options,
+  onAppCreated,
+  children,
+}: AppProviderProps) {
   const [state, setState] = useState<AppState>(() =>
     _app ? { app: _app, isConnected: true, error: null } : defaultState
   );
@@ -143,7 +161,7 @@ export function AppProvider({ appInfo, capabilities, onAppCreated, children }: A
 
     // Connection already in flight (StrictMode double-mount) — wait for it.
     if (!_connecting) {
-      _connecting = connectWithRetry(appInfo, capabilities ?? {}, onAppCreated);
+      _connecting = connectWithRetry(appInfo, capabilities ?? {}, onAppCreated, options);
     }
 
     _connecting.then(

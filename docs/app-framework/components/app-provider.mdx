@@ -32,6 +32,10 @@ import { AppProvider } from 'sunpeak';
   Capabilities to advertise to the host during initialization. See [`McpUiAppCapabilities`](/mcp-apps/types/core-types#mcpuiappcapabilities) for the protocol-level type.
 </ResponseField>
 
+<ResponseField name="options" type="AppOptions">
+  Options passed to the SDK [`App`](/mcp-apps/app/app-class) constructor, such as `autoResize`, `strict`, or `webMcpBridge`. sunpeak keeps `autoResize: true` unless you set it, and reads the options once, when the first connection starts. Pass `{ webMcpBridge: false }` to stop bridging app tools and [WebMCP](/mcp-apps/app/app-tools#webmcp-interoperability). The entry that `sunpeak dev` and `sunpeak build` generate does not pass `options`, so framework resources can't set them today. A nested `AppProvider` reuses the existing `App` and ignores its `options`, so this prop only matters in a custom entry that mounts the first `AppProvider`.
+</ResponseField>
+
 <ResponseField name="onAppCreated" type="(app: App) => void">
   Callback invoked after the `App` instance is created but before `connect()`. Use this to register [event handlers](/mcp-apps/app/event-handlers) that must be in place before the initialization handshake.
 </ResponseField>

@@ -31,6 +31,18 @@ function useApp(options: UseAppOptions): AppState
   Features this app provides (e.g., `{ tools: { listChanged: true } }`).
 </ResponseField>
 
+<ResponseField name="autoResize" type="boolean" default="true">
+  Report size changes to the host. See [`App` options](/mcp-apps/app/app-class).
+</ResponseField>
+
+<ResponseField name="strict" type="boolean" default="false">
+  Throw when host-bound methods run before the initialization handshake completes.
+</ResponseField>
+
+<ResponseField name="webMcpBridge" type="boolean" default="true">
+  Bridge app tools and WebMCP in both directions. See [WebMCP interoperability](/mcp-apps/app/app-tools#webmcp-interoperability).
+</ResponseField>
+
 <ResponseField name="onAppCreated" type="(app: App) => void">
   Called after `App` is created but before `connect()`. Use this to register [event handlers](/mcp-apps/app/event-handlers) that must be in place before the initialization handshake.
 </ResponseField>
@@ -80,10 +92,9 @@ function MyApp() {
 
 ## Behavior
 
-- **HMR persistence** — The `App` instance persists across React Fast Refresh, so code changes don't trigger reconnection. A full page reload establishes a fresh connection.
-- **Strict Mode** — The `App` is intentionally **not closed on unmount** to avoid cleanup issues during React Strict Mode's double-mount cycle. Call `app.close()` manually if needed.
-- **Auto-resize** — The `App` is created with `autoResize: true` by default. For custom options, create the `App` manually and use [`useAutoResize`](/mcp-apps/react/use-auto-resize).
-- **Options stability** — Options are only read on initial mount. Changing `appInfo`, `capabilities`, or `onAppCreated` after mount has no effect.
+- **Unmount** — The hook closes its `App` when the component unmounts. In React Strict Mode's double mount, and when Fast Refresh re-runs effects, the first `App` closes and a new one connects. The upstream JSDoc still says the `App` is not closed, but the 2.1 code closes it. sunpeak's [`AppProvider`](/app-framework/components/app-provider) keeps one `App` at module scope across both cases.
+- **Auto-resize** — The `App` is created with `autoResize: true` by default. Pass `autoResize`, `strict`, or `webMcpBridge` to change the `App` options. For anything else, create the `App` manually and use [`useAutoResize`](/mcp-apps/react/use-auto-resize).
+- **Options stability** — Options are only read on initial mount. Changing `appInfo`, `capabilities`, `onAppCreated`, `autoResize`, `strict`, or `webMcpBridge` after mount has no effect.
 
 <Tip>
 The [sunpeak framework](/quickstart) provides its own [`useApp`](/app-framework/hooks/use-app) that returns just `App | null` via React context, with additional framework integration.
