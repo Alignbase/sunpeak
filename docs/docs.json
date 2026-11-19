@@ -403,6 +403,7 @@
               "mcp-apps/sdk-v2-migration",
               "mcp-apps/layout",
               "mcp-apps/accessibility",
+          "mcp-apps/localization",
               "mcp-apps/patterns",
               "mcp-apps/state-persistence",
               "mcp-apps/testing",

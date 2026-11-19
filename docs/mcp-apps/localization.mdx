@@ -1,0 +1,226 @@
+---
+title: 'MCP App Localization: Locale, Time Zone, and Intl Formatting'
+sidebarTitle: 'Localization'
+description: 'Localize MCP App Views with the host-provided BCP 47 locale and IANA time zone. Format dates, numbers, and currency with Intl, handle right-to-left text, pass locale to server tools, and test locales in the inspector.'
+keywords:
+  [
+    'MCP App localization',
+    'MCP App i18n',
+    'MCP Apps locale',
+    'MCP App time zone',
+    'hostContext locale',
+    'hostContext timeZone',
+    'ChatGPT App localization',
+    'Claude App localization',
+    'MCP App date formatting',
+    'MCP App right-to-left',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+The host tells your View the user's language and time zone during the [`ui/initialize` handshake](/mcp-apps/lifecycle#2-initialization). Two optional fields on [`McpUiHostContext`](/mcp-apps/types/core-types#mcpuihostcontext) carry them:
+
+| Field | Format | Example | Spec description |
+| --- | --- | --- | --- |
+| `locale` | BCP 47 language tag | `"de-DE"`, `"ja-JP"`, `"ar-EG"` | User's language and region preference |
+| `timeZone` | IANA time zone name | `"Europe/Berlin"`, `"Asia/Tokyo"` | User's timezone |
+
+Both fields are optional in the MCP Apps `2026-01-26` specification, so a host may omit either one. The host can also change them later with a [`ui/notifications/host-context-changed`](/mcp-apps/app/event-handlers/onhostcontextchanged) notification, which sends only the fields that changed.
+
+## Read locale and time zone
+
+With the vanilla SDK, read the values after `connect()` and merge later changes:
+
+```ts
+import { App } from '@modelcontextprotocol/ext-apps';
+
+const app = new App({ name: 'Orders', version: '1.0.0' });
+
+let locale = 'en-US';
+let timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+function applyContext(ctx: { locale?: string; timeZone?: string } | undefined) {
+  if (ctx?.locale) locale = ctx.locale;
+  if (ctx?.timeZone) timeZone = ctx.timeZone;
+  document.documentElement.lang = locale;
+  render();
+}
+
+app.onhostcontextchanged = (changed) => applyContext(changed);
+
+await app.connect();
+applyContext(app.getHostContext());
+```
+
+In the sunpeak framework, [`useLocale()`](/app-framework/hooks/use-locale) and [`useTimeZone()`](/app-framework/hooks/use-time-zone) re-render the component when the host context changes. `useLocale()` falls back to `"en-US"`. `useTimeZone()` falls back to the time zone of the browser running the View.
+
+```tsx
+import { useLocale, useTimeZone } from 'sunpeak';
+
+export function OrderDate({ iso }: { iso: string }) {
+  const locale = useLocale();
+  const timeZone = useTimeZone();
+
+  return (
+    <time dateTime={iso}>
+      {new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(
+        new Date(iso)
+      )}
+    </time>
+  );
+}
+```
+
+## Guard against bad values
+
+The host sends plain strings. `Intl` constructors throw a `RangeError` for a malformed language tag or an unknown time zone, and one bad value can crash the whole View. Check both values once and fall back:
+
+```ts
+export function safeLocale(value: string | undefined, fallback = 'en-US'): string {
+  if (!value) return fallback;
+  try {
+    return Intl.getCanonicalLocales(value)[0] ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function safeTimeZone(value: string | undefined): string {
+  const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (!value) return local;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return value;
+  } catch {
+    return local;
+  }
+}
+```
+
+`useLocale()` and `useTimeZone()` return the host value as-is, so wrap them with these helpers if a host or test might send an invalid string.
+
+## Send raw values from the server, format in the View
+
+Your MCP server does not receive the host context. Tool calls carry only the arguments the model or View sends. So keep [`structuredContent`](/mcp-apps/server/content-structuredcontent-meta) locale-neutral and let the View format it:
+
+| Data | Send from the server | Format in the View with |
+| --- | --- | --- |
+| Timestamp | ISO 8601 string with an offset, such as `"2026-11-19T14:30:00Z"`, or epoch milliseconds | `Intl.DateTimeFormat(locale, { timeZone })` |
+| Calendar date with no time | `"2026-11-19"` | `Intl.DateTimeFormat(locale, { timeZone: 'UTC' })` after parsing as UTC midnight, so the day does not shift |
+| Money | Amount in minor units plus an ISO 4217 code, such as `{ "amountMinor": 129900, "currency": "EUR" }` | `Intl.NumberFormat(locale, { style: 'currency', currency })`, after dividing by 10 to the power of the currency's fraction digits (2 for EUR, 0 for JPY) |
+| Count | A number | `Intl.NumberFormat(locale)` and `Intl.PluralRules(locale)` |
+| Relative time | Both timestamps | `Intl.RelativeTimeFormat(locale, { numeric: 'auto' })` |
+| List of names | An array | `Intl.ListFormat(locale, { type: 'conjunction' })` |
+| Sortable labels | An array | `array.sort(new Intl.Collator(locale).compare)` |
+
+Pre-formatted strings such as `"Nov 19, 2:30 PM"` lock the View into one language and one time zone, and the model can misread them on the next turn.
+
+The `content` text you return is for the model, not the user. The model writes its reply in the user's language on its own, so plain English text in `content` works fine. Keep it factual and unambiguous, and use the same ISO formats there.
+
+## When the server needs the locale
+
+Some tools need the locale on the server, for example to search a localized catalog or to build a PDF. Two ways to get it there:
+
+1. **From the View.** Pass the locale as an argument to [`callServerTool()`](/mcp-apps/app/requests/call-server-tool). This works for follow-up calls the View makes.
+
+   ```ts
+   const locale = safeLocale(app.getHostContext()?.locale);
+   await app.callServerTool({
+     name: 'export-invoice',
+     arguments: { invoiceId, locale },
+   });
+   ```
+
+2. **From the model.** Add an optional `locale` property to the tool's [input schema](/mcp-apps/server/tool-schemas) with a description such as `"BCP 47 tag for the user's language, for example de-DE"`. The model fills it from the conversation. Validate it on the server and fall back to a default, because the model can omit it or guess wrong.
+
+Do not trust a locale argument for anything beyond formatting and content selection. It comes from the View or the model, so treat it like any other [untrusted tool input](/mcp-apps/security).
+
+## Translate UI strings
+
+The host does not translate your View. Ship message catalogs inside the resource bundle and pick one by locale, falling back from the full tag to the language and then to your default:
+
+```ts
+const catalogs = {
+  en: { orders: 'Orders', empty: 'No orders yet' },
+  de: { orders: 'Bestellungen', empty: 'Noch keine Bestellungen' },
+  ja: { orders: '注文', empty: '注文はまだありません' },
+} as const;
+
+type Catalog = (typeof catalogs)['en'];
+
+export function messagesFor(locale: string): Catalog {
+  const language = new Intl.Locale(locale).language;
+  return catalogs[language as keyof typeof catalogs] ?? catalogs.en;
+}
+```
+
+Bundling avoids extra network requests. If you load catalogs at runtime from another origin, list that origin in the resource's [`_meta.ui.csp.connectDomains`](/mcp-apps/server/csp-cors), or the host's CSP blocks the request. Hosts may also cache the resource HTML, so a catalog fix in a separately hosted file can reach users before a new bundle does, which is worth keeping in mind when you version strings.
+
+Keep strings short. Inline Views are small, and German or Finnish labels often run much longer than English ones. Test them at narrow [container widths](/mcp-apps/layout).
+
+## Right-to-left languages
+
+Set `dir="rtl"` for Arabic, Hebrew, Persian, Urdu, and other right-to-left scripts. Set `lang` too, so screen readers pick the right voice, as described in the [accessibility guide](/mcp-apps/accessibility).
+
+```ts
+const RTL_LANGUAGES = new Set(['ar', 'fa', 'he', 'ps', 'ur', 'yi', 'dv', 'ckb']);
+
+export function applyDirection(locale: string) {
+  const language = new Intl.Locale(locale).language;
+  document.documentElement.lang = locale;
+  document.documentElement.dir = RTL_LANGUAGES.has(language) ? 'rtl' : 'ltr';
+}
+```
+
+Use CSS logical properties (`margin-inline-start`, `padding-inline-end`, `inset-inline-start`, `text-align: start`) instead of `left` and `right`, so the layout flips without a second stylesheet. Tailwind's `ms-*`, `me-*`, `ps-*`, `pe-*`, `start-*`, and `end-*` utilities map to these properties. Icons that show direction, such as back arrows and carousel chevrons, need to flip as well.
+
+The host chrome around your iframe follows the host's own language setting. Your View only controls its own document.
+
+## Test locales and time zones
+
+The [sunpeak inspector](/testing/inspector) sends `locale` and `timeZone` in the host context, so you can check a View without changing your OS settings:
+
+- **Sidebar.** Edit the **Locale** and **Time Zone** fields. The inspector sends a `host-context-changed` notification, which also checks that your View handles a change after load. The inspector saves these values for later sessions.
+- **URL.** Add `?locale=ar-EG` to the inspector URL to start in that locale.
+- **E2E tests.** Pass `locale` as a render option. The [`inspector` fixture](/testing/e2e) forwards extra options as URL parameters.
+
+```ts
+import { test, expect } from 'sunpeak/test';
+
+test('formats order totals for German users', async ({ inspector }) => {
+  const result = await inspector.renderTool('show-orders', undefined, { locale: 'de-DE' });
+  await expect(result.app().getByText(/1\.299,00/)).toBeVisible();
+});
+
+test.describe('Tokyo time zone', () => {
+  test.use({ timezoneId: 'Asia/Tokyo' });
+
+  test('shows local delivery time', async ({ inspector }) => {
+    // The simulation's order was placed at 2026-11-19T14:30:00Z.
+    const result = await inspector.renderTool('show-orders');
+    await expect(result.app().getByText(/Nov 19, 2026, 11:30/)).toBeVisible();
+  });
+});
+```
+
+The inspector has no time zone URL parameter. Its default time zone is the inspector page's own, and test runs skip saved sidebar values, so Playwright's `timezoneId` option controls the `timeZone` your View receives in tests.
+
+Add a [visual regression](/testing/visual) screenshot for one right-to-left locale and one long-string locale such as `de-DE`. Those two cases catch most layout breaks.
+
+## Checklist
+
+- Read `locale` and `timeZone` from host context and handle later changes.
+- Validate both values before passing them to `Intl`.
+- Send ISO timestamps, minor-unit amounts, and currency codes from the server. Format in the View.
+- Pass the locale to server tools explicitly when the server needs it.
+- Bundle translations, or allow their origin in `connectDomains`.
+- Set `lang` and `dir` on the document root and use logical CSS properties.
+- Test at least one non-English, one right-to-left, and one non-local time zone case.
+
+## Related
+
+- [`getHostContext()`](/mcp-apps/app/accessors/get-host-context) for every host context field
+- [`onhostcontextchanged`](/mcp-apps/app/event-handlers/onhostcontextchanged) for partial context updates
+- [`useLocale`](/app-framework/hooks/use-locale) and [`useTimeZone`](/app-framework/hooks/use-time-zone) in the sunpeak framework
+- [Accessibility](/mcp-apps/accessibility) and [Layout](/mcp-apps/layout) for the rest of the View's environment

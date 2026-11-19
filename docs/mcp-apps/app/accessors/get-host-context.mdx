@@ -62,10 +62,12 @@ if (isFullscreen) {
 ```ts
 const ctx = app.getHostContext();
 const locale = ctx?.locale ?? "en-US";
-const timeZone = ctx?.timeZone ?? "UTC";
+const timeZone = ctx?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 const formatted = new Intl.DateTimeFormat(locale, { timeZone }).format(new Date());
 ```
+
+Both fields are optional, and `Intl` throws a `RangeError` for an invalid tag or time zone. See [MCP App Localization](/mcp-apps/localization) for validation, right-to-left layouts, and locale testing.
 
 ### Adapt to container dimensions
 

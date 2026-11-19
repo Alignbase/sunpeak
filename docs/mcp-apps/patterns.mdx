@@ -202,7 +202,7 @@ Keep these messages short and factual. They become part of the model's working c
 
 ## Adapt to Host Context
 
-Hosts can differ in theme, display mode, size, safe area insets, locale, and available capabilities. Read host context after `connect()` and listen for changes.
+Hosts can differ in theme, display mode, size, safe area insets, locale, and available capabilities. Read host context after `connect()` and listen for changes. For locale and time zone handling, see [Localization](/mcp-apps/localization).
 
 ```ts
 app.onhostcontextchanged = (context) => {

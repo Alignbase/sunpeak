@@ -46,3 +46,5 @@ function MyResource() {
 ```
 
 The locale value comes from [`McpUiHostContext.locale`](/mcp-apps/types/core-types#mcpuihostcontext).
+
+The hook re-renders when the host sends a [`host-context-changed`](/mcp-apps/app/event-handlers/onhostcontextchanged) notification. It returns the host's string without validation, so an invalid value makes `Intl` constructors throw a `RangeError`. See [MCP App Localization](/mcp-apps/localization) for validation helpers, right-to-left handling, and inspector testing.
