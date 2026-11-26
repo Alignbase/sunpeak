@@ -21,6 +21,15 @@ import { App } from "@modelcontextprotocol/ext-apps";
 
 These values are defined by the `McpUiDisplayMode` type. See [Core Types](/mcp-apps/types/core-types) for the full type definition.
 
+A View can also declare the modes it supports by passing `availableDisplayModes` in its `McpUiAppCapabilities` (the second argument to the `App` constructor), which the SDK sends in `ui/initialize`:
+
+```ts
+const app = new App(
+  { name: "MyApp", version: "1.0.0" },
+  { availableDisplayModes: ["inline", "fullscreen"] },
+);
+```
+
 The host may not support all display modes. The returned `mode` reflects what was actually set, which may differ from the requested mode if the host does not support it. Always check the host context's `availableDisplayModes` before requesting a mode change, and use the returned value to update your UI state.
 
 ## Signature

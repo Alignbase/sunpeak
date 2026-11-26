@@ -1,0 +1,236 @@
+---
+title: 'MCP App Performance: Bundle Size, Load Time, and Rendering'
+sidebarTitle: 'Performance'
+description: 'Make MCP App Views load and render fast in ChatGPT, Claude, and other hosts. Covers single-file HTML bundles, bundle size budgets, image and asset handling under CSP, streaming tool input, payload size, resize loops, and measuring load and tool timing.'
+keywords:
+  [
+    'MCP App performance',
+    'MCP App bundle size',
+    'MCP App load time',
+    'MCP Apps single file HTML',
+    'MCP App images CSP',
+    'ChatGPT App performance',
+    'Claude App performance',
+    'MCP App slow to load',
+    'MCP App Vite build',
+    'structuredContent size',
+  ]
+---
+
+<Badge color="green">MCP Apps SDK</Badge>
+
+An MCP App View is an HTML document that the host fetches with `resources/read` and renders in a sandboxed iframe. Every time it appears in a conversation, the host has to read that resource, parse it, run its scripts, finish the [`ui/initialize` handshake](/mcp-apps/lifecycle#2-initialization), and wait for the tool result. Each step adds time before the user sees anything useful.
+
+This page covers where that time goes and what you control.
+
+## Where Load Time Goes
+
+| Stage | What happens | What you control |
+| --- | --- | --- |
+| Resource read | Host calls `resources/read` on your `ui://` URI and gets the HTML text. Hosts may prefetch and cache it before the tool runs. | HTML size, server response time, stable URIs between deploys |
+| Parse and execute | The iframe parses the document and runs your inline scripts. | JavaScript size, framework choice, top-level work |
+| Handshake | `App.connect()` sends `ui/initialize` and waits for host context. | Nothing to tune, but don't block first paint on it |
+| Tool input | Host sends `ui/notifications/tool-input`, optionally preceded by `tool-input-partial` while the model streams arguments. | Rendering a useful state from partial or final input |
+| Tool result | Host sends `ui/notifications/tool-result` after your server tool returns. | Tool handler latency, result payload size |
+| Remote assets | Images, fonts, and API calls load from domains you allow in CSP. | Asset size, domain count, lazy loading |
+
+The tool call usually dominates. A slow API call inside the tool handler delays the result no matter how small the bundle is, so measure both (see [Measuring](#measuring)).
+
+## Ship One Self-Contained HTML File
+
+The MCP Apps spec delivers the View as HTML text in a `resources/read` response. Relative script and stylesheet URLs have nothing to resolve against, and the host's default CSP blocks external scripts unless you list their origins. The reliable shape is a single HTML document with scripts and styles inline.
+
+With plain Vite, [`vite-plugin-singlefile`](https://github.com/richardtallent/vite-plugin-singlefile) produces this shape. `sunpeak build` does it for you. For each resource it:
+
+- builds an IIFE bundle with Vite, targeting `es2020`, minified
+- injects the compiled CSS into the bundle, so there's no separate stylesheet
+- wraps the bundle in an HTML shell with a single inline `<script>`
+- writes `dist/{resource}/{resource}.html` and a metadata file whose `uri` includes a build timestamp, such as `ui://review-mhx2k9q1`
+
+Two consequences follow from the single-file IIFE format:
+
+- Dynamic `import()` and `React.lazy()` don't create separate chunks. Everything ends up in the one file. Lazy components can still delay *execution*, but not *download*.
+- Static assets imported from your source, such as `import logo from './logo.png'`, are inlined as base64 data URIs. A 200 KB PNG adds about 270 KB to every load of that View.
+
+The timestamped URI means each deploy gets a new resource URI. Hosts that cache resource HTML by URI fetch the new version instead of serving a stale one.
+
+## Bundle Size Budget
+
+For reference, the four resources in the sunpeak starter template build to these sizes:
+
+| Resource | Main dependencies | HTML | Gzipped |
+| --- | --- | --- | --- |
+| `review` | React, sunpeak | 569 KB | 153 KB |
+| `albums` | React, sunpeak, Embla carousel | 591 KB | 163 KB |
+| `carousel` | React, sunpeak, Embla carousel | 593 KB | 163 KB |
+| `map` | React, sunpeak, Mapbox GL | 2.5 MB | 692 KB |
+
+Most of the baseline is React, the MCP Apps SDK, and its Zod schemas. A single large dependency, like a map library, can quadruple it. Before adding a package to a View, check its built size and ask whether the server could do the work instead.
+
+Ways to cut size:
+
+- **Move work to the server.** Parse files, render Markdown, compute aggregates, and format large tables in the tool handler. Send the View the result, not the library.
+- **Prefer smaller packages.** Date formatting with [`Intl`](/mcp-apps/localization#send-raw-values-from-the-server-format-in-the-view) instead of a date library. Native `<dialog>` and CSS instead of a component kit.
+- **Split heavy features into separate resources.** If only one tool needs a chart or a map, give that tool its own resource. Other tools keep the smaller bundle.
+- **Watch for duplicate dependencies.** Two versions of the same library both end up in the file. Check your lockfile after upgrades.
+
+## Images, Fonts, and Other Assets
+
+Since imported assets get inlined, host large images and fonts on a CDN or your own server and reference them by URL. Then allow the origin in the resource's [`_meta.ui.csp.resourceDomains`](/mcp-apps/server/csp-cors):
+
+```tsx
+import type { ResourceConfig } from 'sunpeak';
+
+export const resource: ResourceConfig = {
+  name: 'gallery',
+  mimeType: 'text/html;profile=mcp-app',
+  _meta: {
+    ui: {
+      csp: {
+        resourceDomains: ['https://cdn.example.com'],
+      },
+    },
+  },
+};
+```
+
+```tsx
+<img
+  src={photo.thumbnailUrl}
+  width={320}
+  height={240}
+  loading="lazy"
+  decoding="async"
+  alt={photo.title}
+/>
+```
+
+Set `width` and `height` (or a CSS `aspect-ratio`) so the layout doesn't jump when images arrive. Layout jumps trigger extra [size-changed notifications](/mcp-apps/layout#auto-resize), and the host may visibly resize the iframe for each one.
+
+Small icons are fine to inline. An SVG icon set or a few small PNGs cost less than an extra network round trip from inside the sandbox.
+
+For assets that come from the MCP server itself, such as generated images or files, use [`readServerResource()`](/mcp-apps/app/requests/read-server-resource) so they flow through the host's MCP connection rather than a separate fetch.
+
+## Render Before the Result Arrives
+
+Users see an empty frame until your View renders something. Render a skeleton on mount, update from streaming input if the host sends it, and fill in data when the tool result lands.
+
+```tsx
+import { useToolData } from 'sunpeak';
+
+export function OrdersResource() {
+  const { input, inputPartial, output, isLoading, isError } = useToolData<
+    { customerId: string },
+    { orders: Order[] }
+  >();
+
+  const customerId = input?.customerId ?? inputPartial?.customerId;
+
+  if (isError) return <ErrorState />;
+  if (isLoading || !output) return <OrdersSkeleton customerId={customerId} />;
+  return <OrdersTable orders={output.orders} />;
+}
+```
+
+[Streaming tool input](/mcp-apps/app/event-handlers/ontoolinputpartial) gives you arguments while the model is still writing them. It's best-effort and hosts may not send it at all, so treat it as a preview and never as the final value.
+
+Keep top-level module work small. Code that runs at import time, like building lookup tables or parsing large JSON constants, delays the first paint and the handshake.
+
+## Keep Payloads Small
+
+The tool result goes through the host to the View as JSON over `postMessage`. Large results take longer to serialize and parse, and anything in `content` or `structuredContent` may also go to the model, which costs tokens and context.
+
+| Data | Where it belongs |
+| --- | --- |
+| What the model needs to answer follow-ups | `structuredContent` or `content`, kept short |
+| Large lookup maps, render-only fields, IDs | `_meta`, which only the host and View see |
+| Full datasets the user may page through | Fetch on demand with [`callServerTool()`](/mcp-apps/app/requests/call-server-tool) |
+| Binary files and images | A URL in an allowed domain, or an MCP resource via `readServerResource()` |
+
+See [`content`, `structuredContent`, and `_meta`](/mcp-apps/server/content-structuredcontent-meta) for how each field reaches the model and the View.
+
+For lists, return the first page in the tool result and let the View request more. Use an app-only tool (`_meta.ui.visibility: ["app"]`) for the paging call so the model doesn't see it.
+
+## Avoid Resize Loops
+
+With `autoResize` on (the default in `App` and sunpeak's `AppProvider`), the SDK watches your document and sends `ui/notifications/size-changed` when its size changes. A layout that depends on the iframe's own height can loop: content grows, the host grows the iframe, content grows again.
+
+Common causes:
+
+- `height: 100vh` or `h-screen` on a container while the host lets height grow
+- elements sized as a percentage of a parent with no fixed height
+- animations or carousels that change height every frame
+
+Use content height when the host gives you only `maxHeight`, and fill the space only when the host sets a fixed `height`. The [Layout and Display](/mcp-apps/layout#fixed-vs-flexible-dimensions) page has the full contract.
+
+## Zod Parsing Under Strict CSP
+
+The MCP Apps SDK validates every message with Zod. Zod's fastest object parser uses `new Function()`, which needs CSP `unsafe-eval`, and host CSPs usually don't allow it. So the `App` constructor turns on Zod's `jitless` mode by default, which works under the default CSP but parses more slowly.
+
+`AppOptions.allowUnsafeEval: true` skips that and keeps the JIT parser. Only set it if you know the host's CSP permits `unsafe-eval`. Otherwise the first message parse throws and the View never connects. For most Views, message parsing is not the bottleneck and the default is the right choice.
+
+## Measuring
+
+### In sunpeak dev
+
+`sunpeak dev` adds a small overlay to the bottom-right corner of each resource with:
+
+- **Resource**: when the resource HTML was generated, which catches stale cached HTML in a host
+- **Tool**: how long the most recent tool call took, in milliseconds
+
+If the Tool number is large, profile the handler. If it's small but the View still feels slow, look at bundle size and first render.
+
+To see production numbers, run the inspector against built bundles and real handlers:
+
+```bash
+sunpeak dev --prod-tools --prod-resources
+```
+
+### In the browser
+
+Record a trace in the Chrome DevTools Performance panel while the inspector renders your tool. The trace includes the sandboxed iframes, so `performance.mark()` calls inside your View show up in its Timings track:
+
+```ts
+performance.mark('view:mount');
+
+app.ontoolresult = () => {
+  performance.mark('view:result');
+  performance.measure('view:mount-to-result', 'view:mount', 'view:result');
+};
+```
+
+### In tests
+
+Bundle size is easy to track in CI. A check after `sunpeak build` fails the build when a resource grows past your budget:
+
+```ts
+import { readFileSync, statSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
+
+const budgetKb = 200;
+const file = 'dist/review/review.html';
+const gzippedKb = gzipSync(readFileSync(file)).length / 1024;
+
+if (gzippedKb > budgetKb) {
+  throw new Error(`${file} is ${gzippedKb.toFixed(0)} KB gzipped, over the ${budgetKb} KB budget`);
+}
+console.log(`${file}: ${(statSync(file).size / 1024).toFixed(0)} KB, ${gzippedKb.toFixed(0)} KB gzipped`);
+```
+
+## Checklist
+
+- The View renders a skeleton or partial state before the tool result arrives.
+- Large images and fonts load from an allowed CDN domain, not base64 imports.
+- Heavy dependencies live in their own resource or on the server.
+- Tool results keep model-visible fields short and move render-only data to `_meta`.
+- Paged or on-demand data loads through app-only tools.
+- The layout doesn't use viewport height when the host lets height grow.
+- CI tracks the gzipped size of each built resource.
+
+## Related
+
+- [Layout and Display](/mcp-apps/layout) for sizing, auto-resize, and display modes
+- [CSP and CORS](/mcp-apps/server/csp-cors) for allowing asset and API domains
+- [Streaming tool input](/mcp-apps/app/event-handlers/ontoolinputpartial) for rendering while the model writes arguments
+- [Troubleshooting](/mcp-apps/troubleshooting) for Views that don't render at all
+- [`sunpeak build`](/app-framework/cli/build) for build output details

@@ -17,10 +17,10 @@ sunpeak build
 
 The build process creates:
 
-- **HTML** - Optimized and compressed for minimal file size
-- **CSS extraction** - Unused Tailwind styles removed automatically
-- **Asset optimization** - Static assets with hashed filenames for caching
-- **Source maps** - For debugging production issues
+- **One HTML file per resource** - A minified IIFE bundle (`es2020` target) in a single inline `<script>`, with the compiled CSS injected by that script. There are no separate JS, CSS, or chunk files, because hosts receive the View as HTML text from `resources/read`.
+- **Inlined assets** - Images and other files imported from your source are embedded as base64 data URIs. Host large images on a CDN and allow the domain in `_meta.ui.csp.resourceDomains` instead. See [Performance](/mcp-apps/performance#images-fonts-and-other-assets).
+- **Versioned resource URIs** - Each resource's metadata gets a `ui://{name}-{timestamp}` URI, so hosts that cache resource HTML pick up the new build after a deploy.
+- **No source maps** - Production bundles don't include source maps.
 
 ### Output Directory
 
@@ -113,6 +113,10 @@ Tailwind CSS automatically removes unused utility classes:
 - Only classes actually used in your components are included
 - Significantly reduces CSS file size
 - No manual configuration required
+
+### Bundle Size
+
+Dynamic `import()` and `React.lazy()` don't split the output, because every resource is a single file. Keep heavy dependencies in the resources that need them, or move the work to your tool handler. See [MCP App Performance](/mcp-apps/performance) for size budgets and measurement.
 
 ## Usage
 
