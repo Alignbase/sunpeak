@@ -11,7 +11,7 @@ overrides:
   brace-expansion: 5.0.12
   browserslist: 4.29.5
   fast-uri: 3.1.9
-  hono: 4.13.19
+  hono: 4.13.23
   js-yaml: 4.3.2
   lodash: 4.18.1
   minimatch: 11.0.8
@@ -19,3 +19,7 @@ overrides:
   qs: 6.17.1
   source-map-js: 1.2.2
   undici: 7.30.2
+# Temporary: hono 4.13.23 fixes GHSA-656w-x92q-369m, GHSA-586x-c76g-h528, GHSA-mhwf-w6q6-q58w.
+# Remove once it is older than minimumReleaseAge.
+minimumReleaseAgeExclude:
+  - hono@4.13.23

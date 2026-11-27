@@ -1,6 +1,6 @@
 {
   "private": true,
-  "packageManager": "pnpm@11.28.13",
+  "packageManager": "pnpm@11.29.0",
   "scripts": {
     "validate": "pnpm --filter sunpeak validate"
   }
